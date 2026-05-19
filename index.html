@@ -2583,7 +2583,14 @@ function sendEmails(selectedOnly){
   if(!confirm('إرسال '+recipients.length+' بريد إلكتروني؟')) return;
  
   // Initialize EmailJS
-  try{ emailjs.init({publicKey: cfg.pk}); }
+  // Init emailjs with public key
+  try{
+    if(typeof emailjs === 'undefined'){
+      toast('❌ EmailJS library not loaded. Check internet connection.');
+      return;
+    }
+    emailjs.init(cfg.pk);
+  }
   catch(e){ toast('❌ خطأ في تهيئة EmailJS: '+e.message); return; }
  
   // Show progress
@@ -2608,15 +2615,23 @@ function sendEmails(selectedOnly){
     progText.textContent = 'جاري الإرسال '+(i+1)+'/'+total+': '+r.name;
     progBar.style.width = Math.round(((i+1)/total)*100)+'%';
  
-    emailjs.send(cfg.sid, cfg.tid, params)
-      .then(function(){
+    emailjs.send(cfg.sid, cfg.tid, params, {publicKey: cfg.pk})
+      .then(function(response){
         sent++;
-        setTimeout(function(){ sendNext(i+1); }, 800); // small delay to avoid rate limit
+        progText.textContent = '✅ تم إرسال '+(i+1)+'/'+total+': '+r.name;
+        setTimeout(function(){ sendNext(i+1); }, 800);
       })
       .catch(function(err){
         failed++;
-        console.error('Email failed for '+r.name+':', err);
-        setTimeout(function(){ sendNext(i+1); }, 800);
+        // Show the actual error on screen
+        var errMsg = '';
+        if(err && err.text) errMsg = err.text;
+        else if(err && err.message) errMsg = err.message;
+        else if(err && err.status) errMsg = 'Status: '+err.status;
+        else errMsg = JSON.stringify(err);
+        progText.textContent = '❌ فشل إرسال '+r.name+': '+errMsg;
+        progBar.style.background='#e74c3c';
+        setTimeout(function(){ sendNext(i+1); }, 1200);
       });
   }
   sendNext(0);
@@ -2626,4 +2641,3 @@ function sendEmails(selectedOnly){
 </script>
 </body>
 </html>
- 
