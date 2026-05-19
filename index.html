@@ -311,6 +311,9 @@ body{font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:var(--text);
 .num-bar-wrap{margin-top:6px;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden}
 .num-bar{height:100%;border-radius:3px;background:var(--pl);transition:width .2s}
 .eitem-num{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;grid-column:1/-1}
+.email-modal{background:#fff;border-radius:14px;width:100%;max-width:680px;max-height:93vh;overflow-y:auto;direction:rtl}
+.email-hdr{background:#e74c3c;color:#fff;padding:14px 18px;border-radius:14px 14px 0 0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:2}
+.email-hdr h2{font-size:16px;font-weight:600}
 @media(max-width:600px){
   .stats-bar{grid-template-columns:repeat(2,1fr)}
   .lhdr,.srow{grid-template-columns:24px 1fr 88px 55px}
@@ -492,6 +495,7 @@ window.addEventListener('load', function() {
           <button class="btn" style="background:#117a65;color:#fff" onclick="openGrpLoader()">📋 تحميل مجموعة</button>
           <button class="btn bw" onclick="clearDay()">🔄 يوم جديد</button>
           <button class="btn" style="background:#8e44ad;color:#fff" onclick="newGroup()">👥 مجموعة جديدة</button>
+          <button class="btn" style="background:#e74c3c;color:#fff" onclick="openEmailPanel()">📧 إرسال الدرجات</button>
         </div>
         <div class="lhdr">
           <div>#</div><div>اسم الطالب</div>
@@ -612,6 +616,55 @@ window.addEventListener('load', function() {
 </div>
  
  
+ 
+<!-- EMAIL MODAL -->
+<div class="overlay" id="emailModal">
+  <div class="email-modal">
+    <div class="email-hdr">
+      <h2>📧 إرسال الدرجات للطلاب</h2>
+      <button style="background:rgba(255,255,255,.2);border:none;color:#fff;width:27px;height:27px;border-radius:50%;cursor:pointer;font-size:15px" onclick="closeEmailModal()">✕</button>
+    </div>
+    <div style="padding:18px">
+ 
+      <!-- Setup section -->
+      <div style="background:#fff8e1;border:1px solid #f39c12;border-radius:10px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:#7d6608;margin-bottom:8px">⚙️ إعداد الخدمة (مرة واحدة فقط)</div>
+        <div style="font-size:12px;color:#666;line-height:2;margin-bottom:10px">
+          1. اذهب إلى <a href="https://script.google.com" target="_blank" style="color:#2980b9;font-weight:700">script.google.com</a><br>
+          2. أنشئ مشروعاً جديداً → الصق كود <strong>email_sender.gs</strong><br>
+          3. انقر <strong>Deploy → New deployment → Web App</strong><br>
+          4. Execute as: <strong>Me</strong> | Who has access: <strong>Anyone</strong><br>
+          5. انسخ الـ <strong>Web App URL</strong> والصقه أدناه
+        </div>
+        <div>
+          <label style="font-size:11px;color:#888;display:block;margin-bottom:4px">Web App URL</label>
+          <input id="gasUrl" type="text" placeholder="https://script.google.com/macros/s/xxxxx/exec" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:7px 10px;font-size:12px;direction:ltr" oninput="saveGasConfig()">
+        </div>
+      </div>
+ 
+      <!-- Student list -->
+      <div id="emailStudentList"></div>
+ 
+      <!-- Send options -->
+      <div id="emailSendOptions" style="display:none;margin-top:14px">
+        <div style="background:#f8fafc;border:1px solid #ddd;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">📝 رسالة إضافية (اختياري)</div>
+          <textarea id="emailCustomMsg" rows="2" style="width:100%;border:1px solid #ddd;border-radius:8px;padding:8px;font-size:13px;resize:vertical;font-family:inherit" placeholder="أضف رسالة اختيارية...">عزيزي الطالب، نرفق لك تقرير تقييمك اليومي في المستشفى.</textarea>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="sendAllEmails()" style="background:#27ae60;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;flex:1">📧 إرسال للجميع (<span id="emailSendCount">0</span> طالب)</button>
+          <button onclick="sendSelectedEmails()" style="background:#2980b9;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer">✅ إرسال للمحددين</button>
+        </div>
+        <div id="emailProgress" style="display:none;margin-top:12px;background:#f8fafc;border-radius:8px;padding:10px 14px">
+          <div id="emailProgressText" style="font-size:13px;color:var(--muted)">جاري الإرسال...</div>
+          <div style="height:6px;background:#e0e0e0;border-radius:3px;margin-top:6px;overflow:hidden">
+            <div id="emailProgressBar" style="height:100%;background:#27ae60;border-radius:3px;width:0%;transition:width .3s"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
  
 <!-- EVAL MODAL -->
 <div class="overlay" id="evalM">
@@ -1749,6 +1802,7 @@ function tick(){
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2400);}
  
 document.getElementById('evalM').addEventListener('click',function(e){if(e.target===this)closeMod();});
+document.getElementById('emailModal').addEventListener('click',function(e){if(e.target===this)closeEmailModal();});
 document.getElementById('grpLoaderM').addEventListener('click',function(e){if(e.target===this)closeGrpLoader();});
 document.getElementById('attPdfModal').addEventListener('click',function(e){if(e.target===this)document.getElementById('attPdfModal').classList.remove('open');});
 document.getElementById('calM').addEventListener('click',function(e){if(e.target===this)closeCal();});
@@ -2289,6 +2343,243 @@ dbLoad();
 initConnectivityCheck();
  
  
+ 
+ 
+ 
+// ═══════════════════════════════════════════════════════════
+// EMAIL GRADES — Google Apps Script version
+// Simple, reliable, uses your own Gmail directly
+// ═══════════════════════════════════════════════════════════
+ 
+function saveGasConfig(){
+  try{ localStorage.setItem('hsp_gas_url', document.getElementById('gasUrl').value.trim()); }catch(e){}
+}
+ 
+function loadGasConfig(){
+  try{
+    var url = localStorage.getItem('hsp_gas_url')||'';
+    if(url) document.getElementById('gasUrl').value = url;
+  }catch(e){}
+}
+ 
+function openEmailPanel(){
+  loadGasConfig();
+  var sts = getStudents();
+  var day = getSession();
+  var hName   = document.getElementById('hName').value||'—';
+  var supName = document.getElementById('supName').value||'—';
+  var grpLabel= curGroup==='morning'?'صباحي':'مسائي';
+ 
+  // Get all dates with data for current group
+  var datesWithData = Object.keys(history).filter(function(k){
+    return k.indexOf('_'+curGroup)>=0 && Object.keys(history[k]).length>0;
+  }).sort();
+ 
+  // Match emails from studentDb
+  function findEmail(name){
+    if(!studentDb||!studentDb.length) return '';
+    for(var i=0;i<studentDb.length;i++){
+      if(studentDb[i].name&&studentDb[i].name.trim()===name.trim()) return studentDb[i].email||'';
+    }
+    return '';
+  }
+ 
+  if(!sts.length){
+    document.getElementById('emailStudentList').innerHTML =
+      '<div style="text-align:center;padding:24px;color:var(--muted)">لا يوجد طلاب في المجموعة الحالية</div>';
+    document.getElementById('emailSendOptions').style.display='none';
+    document.getElementById('emailModal').classList.add('open');
+    return;
+  }
+ 
+  var hasAnyEmail = false;
+  var html = '<div style="font-size:13px;color:var(--muted);margin-bottom:10px">المجموعة: <strong>'+grpLabel+'</strong> | المستشفى: <strong>'+hName+'</strong> | '+sts.length+' طالب</div>';
+  html += '<div style="overflow-x:auto;border:1px solid #e0e0e0;border-radius:10px;margin-bottom:14px">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px">';
+  html += '<thead><tr style="background:#e74c3c;color:#fff">';
+  html += '<th style="padding:9px 10px;text-align:right"><input type="checkbox" id="checkAll" onchange="toggleAllEmailCheck(this.checked)" style="margin-left:6px">الاسم</th>';
+  html += '<th style="padding:9px 10px;text-align:center">البريد الإلكتروني</th>';
+  for(var di=0;di<datesWithData.length;di++){
+    var cleanD=datesWithData[di].replace('_morning','').replace('_evening','');
+    html += '<th style="padding:9px 10px;text-align:center;font-size:11px">'+cleanD+'</th>';
+  }
+  html += '<th style="padding:9px 10px;text-align:center">المتوسط</th>';
+  html += '</tr></thead><tbody>';
+ 
+  for(var i=0;i<sts.length;i++){
+    var name  = sts[i].name;
+    var email = findEmail(name);
+    if(email) hasAnyEmail=true;
+    var totalSum=0, totalCount=0;
+    var rowBg = i%2===0?'#fff':'#f8fafc';
+ 
+    html += '<tr style="background:'+rowBg+'">';
+    html += '<td style="padding:8px 10px;font-weight:500">';
+    html += '<input type="checkbox" class="emailCheck" data-idx="'+i+'"'+(email?' checked':'')+(email?'':' disabled')+' style="margin-left:6px">';
+    html += name;
+    if(!email) html += ' <span style="font-size:11px;color:#c0392b">(لا يوجد بريد)</span>';
+    html += '</td>';
+    html += '<td style="padding:8px 10px;text-align:center">';
+    if(email){
+      html += '<input type="text" value="'+email+'" data-student-idx="'+i+'" class="emailAddr" style="border:1px solid #ddd;border-radius:6px;padding:3px 6px;font-size:11px;width:170px;direction:ltr">';
+    } else {
+      html += '<span style="color:#aaa;font-size:11px">—</span>';
+    }
+    html += '</td>';
+ 
+    for(var di=0;di<datesWithData.length;di++){
+      var dateKey=datesWithData[di];
+      var rec=(history[dateKey]||{})[i]||{};
+      var grade=rec.total!==undefined?rec.total:null;
+      if(grade!==null){totalSum+=grade;totalCount++;}
+      var gc=grade===null?'#aaa':grade>=12?'#1e8449':grade>=8?'#2980b9':'#c0392b';
+      html += '<td style="padding:8px 10px;text-align:center;font-weight:700;color:'+gc+'">'+(grade!==null?grade.toFixed(2):'—')+'</td>';
+    }
+    var avg=totalCount>0?(totalSum/totalCount).toFixed(2):'—';
+    var ac=totalCount>0?(parseFloat(avg)>=12?'#1e8449':parseFloat(avg)>=8?'#2980b9':'#c0392b'):'#aaa';
+    html += '<td style="padding:8px 10px;text-align:center;font-weight:800;font-size:14px;color:'+ac+'">'+avg+'</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+ 
+  if(!hasAnyEmail){
+    html += '<div style="background:#fff8e1;border:1px solid #f39c12;border-radius:8px;padding:10px 14px;font-size:13px;color:#7d6608">⚠️ لا توجد عناوين بريد. ارفع قاعدة البيانات في تبويب "قاعدة البيانات" أولاً.</div>';
+  }
+ 
+  document.getElementById('emailStudentList').innerHTML = html;
+  var withEmail = 0;
+  for(var i=0;i<sts.length;i++) if(findEmail(sts[i].name)) withEmail++;
+  document.getElementById('emailSendCount').textContent = withEmail;
+  document.getElementById('emailSendOptions').style.display = withEmail>0?'':'none';
+  document.getElementById('emailModal').classList.add('open');
+}
+ 
+function toggleAllEmailCheck(checked){
+  document.querySelectorAll('.emailCheck:not(:disabled)').forEach(function(cb){ cb.checked=checked; });
+}
+ 
+function closeEmailModal(){
+  document.getElementById('emailModal').classList.remove('open');
+}
+ 
+function sendAllEmails(){ sendEmails(false); }
+function sendSelectedEmails(){ sendEmails(true); }
+ 
+function sendEmails(selectedOnly){
+  var gasUrl = (document.getElementById('gasUrl').value||'').trim();
+  if(!gasUrl){
+    toast('❌ أدخل Web App URL أولاً — راجع خطوات الإعداد أعلاه');
+    return;
+  }
+  if(gasUrl.indexOf('script.google.com')<0){
+    toast('❌ الرابط غير صحيح — يجب أن يبدأ بـ https://script.google.com/macros/s/');
+    return;
+  }
+ 
+  var sts     = getStudents();
+  var hName   = document.getElementById('hName').value||'—';
+  var supName = document.getElementById('supName').value||'—';
+  var area    = studentDb&&studentDb.length ? (studentDb[0].area||'') : '';
+  var grpLabel= curGroup==='morning'?'صباحي':'مسائي';
+  var customMsg = document.getElementById('emailCustomMsg').value||'';
+ 
+  var datesWithData = Object.keys(history).filter(function(k){
+    return k.indexOf('_'+curGroup)>=0 && Object.keys(history[k]).length>0;
+  }).sort();
+ 
+  // Collect recipients
+  var recipients = [];
+  document.querySelectorAll('.emailCheck').forEach(function(cb){
+    if(selectedOnly && !cb.checked) return;
+    if(cb.disabled) return;
+    var idx = parseInt(cb.getAttribute('data-idx'));
+    var emailInput = document.querySelector('.emailAddr[data-student-idx="'+idx+'"]');
+    var email = emailInput ? emailInput.value.trim() : '';
+    if(!email) return;
+ 
+    var grades=[], dates=[];
+    for(var di=0;di<datesWithData.length;di++){
+      var dateKey=datesWithData[di];
+      var rec=(history[dateKey]||{})[idx]||{};
+      var grade=rec.total!==undefined?rec.total:null;
+      grades.push(grade);
+      dates.push(dateKey.replace('_morning','').replace('_evening',''));
+    }
+    var totalSum=0,totalCount=0;
+    grades.forEach(function(g){if(g!==null){totalSum+=g;totalCount++;}});
+    var avg=totalCount>0?(totalSum/totalCount).toFixed(2):'—';
+ 
+    // Build grades text
+    var gradesText='';
+    for(var di=0;di<dates.length;di++){
+      gradesText+=dates[di]+': '+(grades[di]!==null?grades[di].toFixed(2)+'/15':'—')+'\n';
+    }
+    gradesText+='\nالمتوسط: '+avg+'/15';
+ 
+    recipients.push({
+      to_email:      email,
+      to_name:       sts[idx].name,
+      from_name:     supName,
+      hospital_name: hName,
+      area:          area,
+      group_type:    grpLabel,
+      grades_table:  gradesText,
+      average_grade: avg,
+      message:       customMsg,
+      date:          curDate
+    });
+  });
+ 
+  if(!recipients.length){ toast('لا يوجد طلاب محددون للإرسال'); return; }
+  if(!confirm('إرسال '+recipients.length+' بريد إلكتروني؟')) return;
+ 
+  var prog     = document.getElementById('emailProgress');
+  var progText = document.getElementById('emailProgressText');
+  var progBar  = document.getElementById('emailProgressBar');
+  prog.style.display='';
+  progBar.style.width='0%';
+  progBar.style.background='#27ae60';
+ 
+  var sent=0, failed=0, total=recipients.length;
+ 
+  function sendNext(i){
+    if(i>=total){
+      progText.textContent='✅ اكتمل — تم الإرسال: '+sent+' | فشل: '+failed;
+      progBar.style.width='100%';
+      progBar.style.background=failed>0?'#e67e22':'#27ae60';
+      toast('تم الإرسال: '+sent+'/'+total);
+      return;
+    }
+    var r=recipients[i];
+    progText.textContent='جاري الإرسال '+(i+1)+'/'+total+': '+r.to_name;
+    progBar.style.width=Math.round(((i+1)/total)*100)+'%';
+ 
+    fetch(gasUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(r)
+    })
+    .then(function(res){ return res.json(); })
+    .then(function(data){
+      if(data.success){
+        sent++;
+        progText.textContent='✅ تم إرسال '+(i+1)+'/'+total+': '+r.to_name;
+      } else {
+        failed++;
+        progText.textContent='❌ فشل '+r.to_name+': '+(data.message||'خطأ غير معروف');
+        progBar.style.background='#e74c3c';
+      }
+      setTimeout(function(){ sendNext(i+1); }, 500);
+    })
+    .catch(function(err){
+      failed++;
+      progText.textContent='❌ فشل الاتصال بـ Google Script: '+err.message;
+      progBar.style.background='#e74c3c';
+      setTimeout(function(){ sendNext(i+1); }, 500);
+    });
+  }
+  sendNext(0);
+}
  
  
 </script>
