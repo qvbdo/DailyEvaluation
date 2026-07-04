@@ -5699,7 +5699,10 @@ function openStudentProfile(id){
   // action bar
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
   h+='<button class="btn bo" onclick="backToProfilesRoster()">→ رجوع للقائمة</button>';
-  h+='<button class="btn bp" onclick="openStudentFullReport(\''+esc(id)+'\')">📊 التحليل الكامل والرسوم</button>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  h+='<button class="btn bo" onclick="promptMergeStudent(\''+esc(id)+'\')" title="دمج سجلَّين لنفس الطالب">🔗 دمج مكرر</button>';
+  h+='<button class="btn bp" onclick="openStudentFullReport(\''+esc(id)+'\')">📊 التحليل الكامل</button>';
+  h+='</div>';
   h+='</div>';
   // header
   h+='<div style="background:linear-gradient(135deg,var(--primary),#0c5b52);color:#fff;border-radius:16px;padding:18px 20px;margin-bottom:14px">';
@@ -5776,7 +5779,14 @@ function openStudentProfile(id){
         h+='</div></div>';
         h+='</div></details>';
       });
-      h+='</div></div>';
+      h+='</div>'; // close days
+      // P4: per-hospital rotation note (editable, per student)
+      h+='<div style="padding:8px 12px;border-top:1px solid var(--line-soft);background:#fafdfc">';
+      h+='<label style="font-size:11px;color:#0f6e56;font-weight:700;display:block;margin-bottom:4px">📝 ملاحظة الدورة — خاصة بهذا المستشفى</label>';
+      h+='<textarea id="rot_note_'+esc(hid)+'" placeholder="ملاحظة عن أداء الطالب في هذه الدورة..." style="width:100%;min-height:42px;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12.5px;resize:vertical">'+esc((pf.rotationNotes&&pf.rotationNotes[hid])||'')+'</textarea>';
+      h+='<button class="btn bp" style="font-size:11px;padding:5px 10px;margin-top:5px" onclick="saveRotationNote(\''+esc(id)+'\',\''+esc(hid)+'\')">حفظ الملاحظة</button>';
+      h+='</div>';
+      h+='</div>'; // close card
     });
   }
 
@@ -5868,6 +5878,75 @@ function clearDayOverride(sid, evalId){
   }, { action:'profile:override:clear:'+evalId });
   toast('أُزيل التصحيح');
   openStudentProfile(sid);
+}
+
+// ── P4: per-hospital rotation note ──
+function saveRotationNote(sid, hid){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
+  if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
+  var el=document.getElementById('rot_note_'+hid); var v=el?String(el.value||'').trim():'';
+  var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
+  Store.update('students.'+sid, function(st){
+    st.profile=st.profile||{}; st.profile.rotationNotes=st.profile.rotationNotes||{};
+    if(v) st.profile.rotationNotes[hid]=v; else delete st.profile.rotationNotes[hid];
+    st.profile.updatedAt=Date.now(); st.profile.updatedBy=who;
+    return st;
+  }, { action:'profile:rotnote:'+hid });
+  toast(v?'✓ حُفِظت ملاحظة الدورة':'أُزيلت الملاحظة');
+  openStudentProfile(sid);
+}
+
+// ── P4: merge two records for the same student (duplicate curation) ──
+function promptMergeStudent(sourceId){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح'); return; }
+  var src=(window.eva&&eva.students[sourceId])||null; if(!src) return;
+  var opts={}; Object.keys(eva.students).forEach(function(id){ if(id!==sourceId) opts[id]=(eva.students[id].name||'—')+' ('+id+')'; });
+  if(!Object.keys(opts).length){ toast('لا يوجد طالب آخر للدمج معه'); return; }
+  if(typeof Swal==='undefined'){ toast('أداة الدمج غير متاحة الآن'); return; }
+  Swal.fire({
+    title:'دمج سجلات الطالب',
+    html:'سيتم نقل كل سجلات <b>'+esc(src.name||'')+'</b> إلى الطالب الذي تختاره، ثم حذف هذا السجل المكرر.<br><span style="color:#be123c;font-size:12px">إجراء لا يمكن التراجع عنه بسهولة.</span>',
+    input:'select', inputOptions:opts, inputPlaceholder:'اختر الطالب الهدف (الذي سيبقى)',
+    showCancelButton:true, confirmButtonText:'دمج', cancelButtonText:'إلغاء', confirmButtonColor:'#be123c'
+  }).then(function(res){ if(res && res.isConfirmed && res.value){ mergeStudents(sourceId, res.value); } });
+}
+function mergeStudents(sourceId, targetId){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح'); return; }
+  if(sourceId===targetId){ toast('اختر طالباً مختلفاً'); return; }
+  if(!(window.Store && window.eva && eva.students[sourceId] && eva.students[targetId])){ toast('طالب غير موجود'); return; }
+  var src=eva.students[sourceId];
+  var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
+  var moved=0;
+  // reassign the source student's evaluations to the target (re-key by id; on a
+  // key collision keep the target's existing record and drop the duplicate).
+  Object.keys(eva.evaluations).slice().forEach(function(k){
+    var r=eva.evaluations[k]; if(!r || r.studentId!==sourceId) return;
+    var newKey = (k.slice(-(sourceId.length+1))==='_'+sourceId) ? (k.slice(0, k.length-sourceId.length)+targetId) : null;
+    if(newKey && !eva.evaluations[newKey]){
+      var rec=JSON.parse(JSON.stringify(r)); rec.studentId=targetId;
+      Store.update('evaluations.'+newKey, function(){ return rec; }, { action:'merge:reassign', silent:true });
+      Store.remove('evaluations.'+k, { action:'merge:remove', silent:true });
+      moved++;
+    } else if(newKey && eva.evaluations[newKey]){
+      Store.remove('evaluations.'+k, { action:'merge:dropdup', silent:true });
+    } else {
+      Store.update('evaluations.'+k, function(rec){ rec.studentId=targetId; return rec; }, { action:'merge:reassignfield', silent:true });
+      moved++;
+    }
+  });
+  // merge profile: fill the target's blanks from the source; union overrides/notes
+  Store.update('students.'+targetId, function(st){
+    st.profile=st.profile||{}; var sp=src.profile||{};
+    ['coordinatorNotes','goals','contactEmail','contactPhone','bio'].forEach(function(f){ if(!st.profile[f] && sp[f]) st.profile[f]=sp[f]; });
+    st.profile.overrides=Object.assign({}, sp.overrides||{}, st.profile.overrides||{});
+    st.profile.rotationNotes=Object.assign({}, sp.rotationNotes||{}, st.profile.rotationNotes||{});
+    st.profile.updatedAt=Date.now(); st.profile.updatedBy=who;
+    return st;
+  }, { action:'merge:profile' });
+  Store.remove('students.'+sourceId, { action:'merge:removeStudent' });
+  if(window.bus) bus.emit('students:changed', {});
+  toast('✓ تم الدمج — نُقل '+moved+' سجل');
+  __profSelectedId=null; renderStudentProfiles();
 }
 
 // live refresh: keep the roster current when data changes elsewhere; never
