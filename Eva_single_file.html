@@ -2250,6 +2250,10 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
           <button class="tab-btn" id="tbpg" onclick="showTab('prog')">📈 متابعة الطلاب</button>
         </div>
         <div class="nav-group">
+          <div class="nav-group-label">الطلاب</div>
+          <button class="tab-btn" id="tbprofiles" onclick="showTab('profiles')">👤 ملفات الطلاب</button>
+        </div>
+        <div class="nav-group">
           <div class="nav-group-label">السجلات والبيانات</div>
           <button class="tab-btn" id="tbh" onclick="showTab('hist')">📅 السجل التاريخي</button>
           <button class="tab-btn" id="tbdb" onclick="showTab('db')">🗄️ قاعدة البيانات</button>
@@ -2280,6 +2284,10 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
       <!-- ADMIN PANEL — role management + student portal onboarding (admin only) -->
       <div class="tab-panel" id="padmin">
         <div id="adminContent"></div>
+      </div>
+      <!-- STUDENT PROFILES (P1+P2) — evaluator/admin: per-student aggregated profile + editable descriptive fields -->
+      <div class="tab-panel" id="pprofiles">
+        <div id="studentProfilesContent"></div>
       </div>
       <!-- TAB: HOME DASHBOARD (phase-4) — pending, flags, quick actions -->
       <div class="tab-panel active" id="phome">
@@ -3877,8 +3885,8 @@ function showTab(n){
   closeNav(); // opening any tab returns to full-screen content
   document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
-  var panels={home:'phome',att:'pa',paper:'pp',roster:'pr',hist:'ph',db:'pdb',audit:'pal',prog:'ppg',rot:'prot',stat:'pstat',course:'pcourse',admin:'padmin'};
-  var btns={home:'tbhome',att:'tba',paper:'tbp',roster:'tbr',hist:'tbh',db:'tbdb',audit:'tbal',prog:'tbpg',rot:'tbrot',stat:'tbstat',course:'tbcourse',admin:'tbadmin'};
+  var panels={home:'phome',att:'pa',paper:'pp',roster:'pr',hist:'ph',db:'pdb',audit:'pal',prog:'ppg',rot:'prot',stat:'pstat',course:'pcourse',admin:'padmin',profiles:'pprofiles'};
+  var btns={home:'tbhome',att:'tba',paper:'tbp',roster:'tbr',hist:'tbh',db:'tbdb',audit:'tbal',prog:'tbpg',rot:'tbrot',stat:'tbstat',course:'tbcourse',admin:'tbadmin',profiles:'tbprofiles'};
   var panel=document.getElementById(panels[n]);
   panel.classList.add('active');
   // restart the entrance animation so every switch feels alive
@@ -3897,6 +3905,7 @@ function showTab(n){
   if(n==='db'){ dbRender(); renderBackupCenter(); }
   if(n==='audit')  renderAudit();
   if(n==='prog')   renderProgress();
+  if(n==='profiles') renderStudentProfiles();
   if(n==='rot')    renderRotationTab();
   if(n==='stat')   statRender();
   if(n==='course'){
@@ -5347,8 +5356,8 @@ function applyProgZebra(){
 // Per-student longitudinal detail (trend of the 5 sections over sessions)
 // Build the profile shape openProgressDetail expects, sourced from the
 // canonical Store (used when the legacy history-based profile is missing).
-function buildProfileFromStore(name){
-  var sid = studentIdByName(name); if(!sid) return null;
+function buildProfileFromStore(name, sidOverride){
+  var sid = sidOverride || studentIdByName(name); if(!sid) return null;
   var tl = Selectors.getStudentTimeline(sid);
   if(!tl.length) return null;
   var sessions=[], sum=0, cnt=0, present=0, absent=0, missingPaper=0, evals=0;
@@ -5367,13 +5376,16 @@ function buildProfileFromStore(name){
   return { name:name, sessions:sessions, sum:sum, cnt:cnt, present:present, absent:absent,
            missingPaper:missingPaper, evals:evals, hospitals:{}, avg:avg, risk:risk };
 }
-function openProgressDetail(encName){
+function openProgressDetail(encName, idOverride){
   var name = decodeURIComponent(encName);
   var prof = getProfiles();
-  var p = prof[name];
+  // idOverride (passed by the id-keyed Student Profiles tab) disambiguates
+  // students who share a name: prefer the canonical by-id profile so the
+  // charts never resolve to the wrong same-named student.
+  var p = idOverride ? (buildProfileFromStore(name, idOverride) || prof[name]) : prof[name];
   // PHASE 4: fall back to the canonical Store when the legacy (history-based)
   // profile is absent — keeps deep links robust after the data-core migration.
-  if(!p && window.Selectors){ p = buildProfileFromStore(name); }
+  if(!p && window.Selectors){ p = buildProfileFromStore(name, idOverride); }
   if(!p){ toast('لا توجد بيانات لهذا الطالب'); return; }
   var colors=['#14746b','#117a65','#6c3483','#b7770d','#922b21'];
 
@@ -5394,7 +5406,7 @@ function openProgressDetail(encName){
   // ★ PHASE 5: entrustment trend + case log + feedback (from the canonical store)
   try{
     if(window.Selectors){
-      var __sid3 = studentIdByName(name);
+      var __sid3 = idOverride || studentIdByName(name);
       if(__sid3){
         var __tl = Selectors.getStudentTimeline(__sid3);
         // entrustment progression (6.2)
@@ -5546,9 +5558,247 @@ function openProgressDetail(encName){
   document.getElementById('progDetailBody').innerHTML = html;
   document.getElementById('progDetailM').classList.add('open');
   // PHASE 4: reflect the open student in the URL hash (shareable + refresh-safe)
-  try{ var __sid=studentIdByName(name); if(__sid){ __suppressHashOnce=true; location.hash='#student/'+encodeURIComponent(__sid); } }catch(e){}
+  try{ var __sid=idOverride||studentIdByName(name); if(__sid){ __suppressHashOnce=true; location.hash='#student/'+encodeURIComponent(__sid); } }catch(e){}
 }
 function closeProgressDetail(){ document.getElementById('progDetailM').classList.remove('open'); if(location.hash.indexOf('#student/')===0){ __suppressHashOnce=true; location.hash=''; } }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STUDENT PROFILES (P1 + P2) — evaluator/admin tab.
+   P1: per-student profile that AUTO-aggregates identity, evaluations,
+       attendance, rotation notes and stats from the canonical store (read
+       only). P2: an editable DESCRIPTIVE section (coordinator notes, goals,
+       contact, bio) persisted via Store.update → audit + offline outbox +
+       Firebase sync, stored under eva.students[id].profile. Computed data
+       (scores/attendance) is never altered. Deep analytics + charts reuse
+       the existing openProgressDetail() modal (zero duplication).
+   ═══════════════════════════════════════════════════════════════════════ */
+var __profSelectedId = null;
+
+// friendly hospital label from a stored hospitalId (e.g. "h_Maternity")
+function _profHospLabel(hid){
+  if(!hid) return '';
+  try{ var hs=(window.eva&&eva.config&&eva.config.hospitals)||[];
+    for(var i=0;i<hs.length;i++){ if(hs[i].id===hid) return hs[i].name||hid; } }catch(e){}
+  return String(hid).replace(/^h[_-]/,'');
+}
+function _profKpi(v,l,c){ return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:12px;color:var(--muted)">'+l+'</div></div>'; }
+function _profField(label,kind,fid,val){
+  val=(val==null)?'':String(val);
+  var inner = (kind==='textarea')
+    ? '<textarea id="'+fid+'" style="width:100%;min-height:58px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical">'+esc(val)+'</textarea>'
+    : '<input id="'+fid+'" value="'+esc(val)+'" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px">';
+  return '<div style="margin-bottom:10px"><label style="font-size:12px;color:var(--ink-2);font-weight:700;display:block;margin-bottom:4px">'+label+'</label>'+inner+'</div>';
+}
+
+// one pass over eva.evaluations → per-student {avg, present, absent, sessions}
+function _profileSummaries(){
+  var map={}, evals=(window.eva&&eva.evaluations)||{};
+  Object.keys(evals).forEach(function(eid){
+    var r=evals[eid]; if(!r||!r.studentId) return;
+    var m=map[r.studentId]||(map[r.studentId]={sum:0,cnt:0,present:0,absent:0,sessions:0});
+    m.sessions++;
+    var t=window.Selectors?Selectors.recordTotal(r):(typeof r.total==='number'?r.total:null);
+    if(t!=null){ m.sum+=t; m.cnt++; }
+    if(r.attendance==='present') m.present++; else if(r.attendance==='absent') m.absent++;
+  });
+  Object.keys(map).forEach(function(k){ map[k].avg=map[k].cnt>0?(map[k].sum/map[k].cnt):null; });
+  return map;
+}
+
+// ── Level 1: roster of every student in the database ──
+function renderStudentProfiles(){
+  __profSelectedId = null;
+  var host=document.getElementById('studentProfilesContent'); if(!host) return;
+  if(window.Roles && Roles.isStudent()){
+    host.innerHTML='<div style="border:2px dashed var(--danger);border-radius:12px;padding:30px;text-align:center;color:var(--danger);margin-top:20px">🛡️ هذه الصفحة للمشرفين فقط.</div>';
+    return;
+  }
+  var ids=Object.keys((window.eva&&eva.students)||{});
+  ids.sort(function(a,b){ return String((eva.students[a]||{}).name||'').localeCompare(String((eva.students[b]||{}).name||''),'ar'); });
+  var sum=_profileSummaries();
+
+  var h='';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
+  h+='<div><div style="font-size:18px;font-weight:800;color:var(--primary)">👤 ملفات الطلاب</div>';
+  h+='<div style="font-size:12px;color:var(--muted)">ملف متكامل لكل طالب — يُجمَع تلقائياً من التقييم والدورة والإحصائيات، مع إمكانية إضافة ملاحظات يدوية</div></div>';
+  h+='</div>';
+
+  if(!ids.length){
+    h+='<div class="hist-empty"><div style="font-size:44px;margin-bottom:10px">👤</div><div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">لا يوجد طلاب في قاعدة البيانات بعد</div><div style="font-size:13px;color:var(--muted);line-height:1.8">أضف الطلاب من «إعداد الكورس» أو «قاعدة البيانات»، وستظهر ملفاتهم هنا تلقائياً.</div></div>';
+    host.innerHTML=h; return;
+  }
+
+  h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">';
+  h+='<input type="text" class="sbox" id="profSearch" placeholder="🔍 ابحث عن طالب..." oninput="filterProfiles(this.value)" style="max-width:280px">';
+  h+='<span id="profCount" style="font-size:13px;color:var(--muted)">'+ids.length+' طالب</span>';
+  h+='</div>';
+
+  h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:620px"><thead><tr style="background:var(--primary);color:#fff">';
+  ['اسم الطالب','المجموعة','الجلسات','المتوسط /15','حاضر','غائب','الحالة'].forEach(function(c){
+    h+='<th style="padding:9px 10px;text-align:right;font-size:12px;white-space:nowrap">'+c+'</th>';
+  });
+  h+='</tr></thead><tbody id="profTbody">';
+  ids.forEach(function(id){
+    var s=eva.students[id]||{}; var m=sum[id]||{avg:null,present:0,absent:0,sessions:0};
+    var risk=[]; try{ if(window.Flags) risk=Flags.forStudent(id); }catch(e){}
+    var avgTxt=m.avg!=null?m.avg.toFixed(2):'—';
+    var avgCol=m.avg==null?'#aaa':m.avg>=12?'var(--success)':m.avg>=RISK_AVG?'var(--pl)':'var(--danger)';
+    h+='<tr class="prof-trow" data-nm="'+esc(String(s.name||'').toLowerCase())+'" style="cursor:pointer" onclick="openStudentProfile(\''+esc(id)+'\')">';
+    h+='<td style="padding:8px 10px;font-weight:600">'+esc(s.name||'—')+(risk.length?' <span style="font-size:11px">⚠️</span>':'')+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center;color:var(--muted)">'+esc(s.group||s.area||'—')+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center">'+m.sessions+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center;font-weight:700;color:'+avgCol+'">'+avgTxt+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center;color:var(--success)">'+m.present+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center;color:var(--danger)">'+m.absent+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center">'+(risk.length?'<span style="color:var(--danger);font-weight:700">متابعة</span>':'<span style="color:var(--success)">جيد</span>')+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  host.innerHTML=h;
+}
+
+function filterProfiles(q){
+  q=(q||'').trim().toLowerCase();
+  var rows=document.querySelectorAll('#profTbody .prof-trow'), shown=0;
+  rows.forEach(function(r){ var m=!q||(r.getAttribute('data-nm')||'').indexOf(q)>=0; r.style.display=m?'':'none'; if(m) shown++; });
+  var c=document.getElementById('profCount'); if(c) c.textContent=shown+' طالب';
+}
+function backToProfilesRoster(){ __profSelectedId=null; renderStudentProfiles(); }
+
+// ── Level 2: one student's full profile ──
+function openStudentProfile(id){
+  var host=document.getElementById('studentProfilesContent'); if(!host) return;
+  var s=(window.eva&&eva.students[id])||null;
+  if(!s){ toast('لا يوجد طالب بهذا المعرف'); renderStudentProfiles(); return; }
+  __profSelectedId=id;
+  var tl=window.Selectors?Selectors.getStudentTimeline(id):[];
+  var graded=tl.filter(function(t){return t.total!=null;});
+  var avg=graded.length?(graded.reduce(function(a,t){return a+t.total;},0)/graded.length):null;
+  var present=tl.filter(function(t){return t.attendance==='present';}).length;
+  var absent=tl.filter(function(t){return t.attendance==='absent';}).length;
+  var flags=[]; try{ if(window.Flags) flags=Flags.forStudent(id).map(function(f){return f.msg;}); }catch(e){}
+  var pf=s.profile||{};
+  var entNames={1:'مراقبة',2:'إشراف مباشر',3:'إشراف غير مباشر',4:'مستقل',5:'يُشرف على غيره'};
+
+  var h='';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
+  h+='<button class="btn bo" onclick="backToProfilesRoster()">→ رجوع للقائمة</button>';
+  h+='<button class="btn bp" onclick="openStudentFullReport(\''+esc(id)+'\')">📊 التحليل الكامل والرسوم</button>';
+  h+='</div>';
+
+  // header
+  h+='<div style="background:linear-gradient(135deg,var(--primary),#0c5b52);color:#fff;border-radius:16px;padding:18px 20px;margin-bottom:14px">';
+  h+='<div style="font-size:20px;font-weight:800">👤 '+esc(s.name||'—')+'</div>';
+  var meta=[]; if(s.group) meta.push('المجموعة: '+esc(s.group)); if(s.area) meta.push(esc(s.area)); if(s.email) meta.push(esc(s.email)); meta.push(s.active===false?'غير نشط':'نشط');
+  h+='<div style="font-size:12px;opacity:.92;margin-top:5px">'+meta.join(' • ')+'</div></div>';
+
+  // KPIs
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:14px">';
+  h+=_profKpi(avg!=null?avg.toFixed(1):'—','المتوسط /15','var(--primary)');
+  h+=_profKpi(present,'أيام حضور','var(--success)');
+  h+=_profKpi(absent,'أيام غياب',absent?'#c0504a':'var(--muted)');
+  h+=_profKpi(tl.length,'إجمالي الجلسات','var(--indigo)');
+  h+='</div>';
+
+  if(flags.length){
+    h+='<div style="background:#fdf2f2;border:1px solid var(--danger);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:var(--danger);font-weight:700">⚠️ '+flags.map(function(f){return esc(f);}).join(' • ')+'</div>';
+  }
+
+  var ents=tl.filter(function(t){return t.entrustment;});
+  if(ents.length){
+    var last=ents[ents.length-1].entrustment;
+    h+='<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
+    h+='<div style="font-size:13px;font-weight:800;color:#2563a8;margin-bottom:4px">🪜 مستوى الاستقلالية الحالي</div>';
+    h+='<div style="font-size:16px;font-weight:800;color:var(--primary)">'+last+' — '+(entNames[last]||'')+'</div>';
+    h+='<div style="font-size:12px;color:var(--muted);margin-top:3px">التسلسل: '+ents.map(function(t){return t.entrustment;}).join(' ← ')+'</div></div>';
+  }
+
+  // ── EDITABLE descriptive section (P2) ──
+  h+='<div style="background:#fffdf5;border:1px solid #e8d9a8;border-radius:12px;padding:14px 16px;margin-bottom:16px">';
+  h+='<div style="font-size:14px;font-weight:800;color:#8a6d1a;margin-bottom:4px">✏️ ملاحظات وبيانات يدوية</div>';
+  h+='<div style="font-size:11px;color:var(--muted);margin-bottom:10px">تُحفظ في ملف الطالب وتُزامَن سحابياً — لا تؤثّر على الدرجات أو الحضور المحسوبة.</div>';
+  h+=_profField('ملاحظات المنسّق / المشرف','textarea','prof_note',pf.coordinatorNotes);
+  h+=_profField('الأهداف التعليمية','textarea','prof_goals',pf.goals);
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">';
+  h+=_profField('بريد بديل للتواصل','input','prof_email',pf.contactEmail);
+  h+=_profField('هاتف للتواصل','input','prof_phone',pf.contactPhone);
+  h+='</div>';
+  h+=_profField('نبذة','textarea','prof_bio',pf.bio);
+  h+='<div style="display:flex;align-items:center;gap:12px;margin-top:6px;flex-wrap:wrap">';
+  h+='<button class="btn bp" onclick="saveStudentProfileEdit(\''+esc(id)+'\')">💾 حفظ الملف</button>';
+  if(pf.updatedAt){ h+='<span style="font-size:11px;color:var(--muted)">آخر تعديل: '+esc(pf.updatedBy||'')+' • '+esc(new Date(pf.updatedAt).toLocaleDateString('ar'))+'</span>'; }
+  h+='</div></div>';
+
+  // ── Evaluations timeline (auto, newest first) with rotation + daily note ──
+  h+='<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:8px">📅 سجل التقييمات اليومية</div>';
+  if(!tl.length){
+    h+='<div style="background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px">لا توجد تقييمات مسجّلة لهذا الطالب بعد.</div>';
+  } else {
+    h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
+    tl.slice().reverse().forEach(function(t){
+      var raw=(window.eva&&eva.evaluations[t.id])||{};
+      var rot=[]; var hl=_profHospLabel(raw.hospitalId||t.hospitalId); if(hl) rot.push(esc(hl));
+      if(raw.legacyCycleDay||t.legacyCycleDay) rot.push('يوم '+esc(raw.legacyCycleDay||t.legacyCycleDay));
+      if(raw.unit) rot.push(esc(raw.unit));
+      var totCol=t.total==null?'#aaa':t.total>=12?'var(--success)':t.total>=RISK_AVG?'var(--pl)':'var(--danger)';
+      var att=t.attendance==='present'?'<span style="color:var(--success)">✓ حاضر</span>':t.attendance==='absent'?'<span style="color:var(--danger)">✗ غائب</span>':'<span style="color:var(--muted)">— لم يُسجَّل</span>';
+      h+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
+      h+='<span style="font-size:13px;font-weight:700">'+esc(t.dateISO||('دورة يوم '+(t.legacyCycleDay||'?')))+'</span>';
+      h+='<span style="font-size:13px;font-weight:800;color:'+totCol+'">'+(t.total!=null?t.total.toFixed(2):'—')+' /15</span>';
+      h+='</div>';
+      h+='<div style="font-size:12px;color:var(--muted);margin-top:3px">'+att+(rot.length?(' • '+rot.join(' • ')):'')+(t.paperDelivered===false?' • <span style="color:var(--warn)">ورقة غير مُسلّمة</span>':'')+'</div>';
+      if(raw.notes && String(raw.notes).trim()){ h+='<div style="font-size:12.5px;margin-top:6px;background:var(--surface-2);border-radius:8px;padding:7px 9px;color:var(--ink-2)">📝 '+esc(raw.notes)+'</div>'; }
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  host.innerHTML=h;
+}
+
+// Deep analytics reuse — routed through the sanitized id (never the free-text
+// name) so it is XSS-safe and disambiguates students who share a name.
+function openStudentFullReport(id){
+  var s=(window.eva&&eva.students[id])||null;
+  if(!s){ toast('لا يوجد طالب بهذا المعرف'); return; }
+  openProgressDetail(encodeURIComponent(s.name||''), id);
+}
+
+// ── P2: persist the descriptive edits (audited + synced; computed data untouched) ──
+function saveStudentProfileEdit(id){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
+  if(!(window.Store && window.eva && eva.students[id])){ toast('تعذّر الحفظ — لا يوجد اتصال بقاعدة البيانات'); return; }
+  function v(fid){ var el=document.getElementById(fid); return el?String(el.value||'').trim():''; }
+  var note=v('prof_note'), goals=v('prof_goals'), email=v('prof_email'), phone=v('prof_phone'), bio=v('prof_bio');
+  var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
+  Store.update('students.'+id, function(st){
+    st.profile=st.profile||{};
+    st.profile.coordinatorNotes=note;
+    st.profile.goals=goals;
+    st.profile.contactEmail=email;
+    st.profile.contactPhone=phone;
+    st.profile.bio=bio;
+    st.profile.updatedAt=Date.now();
+    st.profile.updatedBy=who;
+    return st;
+  }, { action:'profile:edit:'+id });
+  toast('✓ تم حفظ ملف الطالب');
+  openStudentProfile(id);
+}
+
+// live refresh: keep the roster current when data changes elsewhere; never
+// disrupt an open profile (avoids clobbering an in-progress manual edit).
+if(window.bus){
+  ['evaluation:saved','attendance:changed','students:changed','flags:changed'].forEach(function(ev){
+    bus.on(ev, function(){
+      var panel=document.getElementById('pprofiles');
+      if(!panel || !panel.classList.contains('active')) return;
+      if(__profSelectedId) return;
+      renderStudentProfiles();
+    });
+  });
+}
 
 // ── PHASE 4: deep-link hash routing (#student/<id>, #day/<key>) ──────────
 // Views set the hash when opening a detail; on load/refresh/back the router
