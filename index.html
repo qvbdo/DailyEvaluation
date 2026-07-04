@@ -3578,7 +3578,7 @@ function renderProgress(){
     html += '<div style="display:flex;flex-direction:column;gap:8px">';
     atRisk.forEach(function(n){
       var p = prof[n];
-      html += '<div style="background:#fff;border:1px solid #f0c9c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer" onclick="openProgressDetail(\''+encodeURIComponent(n)+'\')">';
+      html += '<div style="background:#fff;border:1px solid #f0c9c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer" data-full="'+esc(n)+'" data-sid="'+esc(studentIdByName(n)||'')+'" onclick="openProgRowFromEl(this)">';
       html += '<span style="font-weight:600;font-size:14px">'+n+'</span>';
       html += '<span style="font-size:12px;color:var(--danger)">'+p.risk.join(' • ')+'</span>';
       html += '</div>';
@@ -3602,7 +3602,7 @@ function renderProgress(){
     var p = prof[n];
     var avgTxt = p.avg!==null ? p.avg.toFixed(2) : '—';
     var avgCol = p.avg===null ? '#aaa' : p.avg>=12 ? 'var(--success)' : p.avg>=RISK_AVG ? 'var(--pl)' : 'var(--danger)';
-    html += '<tr class="prog-trow" data-nm="'+esc(n.toLowerCase())+'" style="cursor:pointer" onclick="openProgressDetail(\''+encodeURIComponent(n)+'\')">';
+    html += '<tr class="prog-trow" data-nm="'+esc(n.toLowerCase())+'" data-full="'+esc(n)+'" data-sid="'+esc(studentIdByName(n)||'')+'" style="cursor:pointer" onclick="openProgRowFromEl(this)">';
     html += '<td style="padding:8px 10px;font-weight:600">'+esc(n)+(p.risk.length?' <span style="font-size:11px">⚠️</span>':'')+'</td>';
     html += '<td style="padding:8px 10px;text-align:center">'+p.sessions.length+'</td>';
     html += '<td style="padding:8px 10px;text-align:center;font-weight:700;color:'+avgCol+'">'+avgTxt+'</td>';
@@ -3661,6 +3661,7 @@ function buildProfileFromStore(name, sidOverride){
 }
 function openProgressDetail(encName, idOverride){
   var name = decodeURIComponent(encName);
+  window.__progPrintEnc = encName; // stash for the print button (no user text in inline JS)
   var prof = getProfiles();
   // idOverride (passed by the id-keyed Student Profiles tab) disambiguates
   // students who share a name: prefer the canonical by-id profile so the
@@ -3676,7 +3677,7 @@ function openProgressDetail(encName, idOverride){
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
   html += '<div><div style="font-size:18px;font-weight:700;color:var(--primary)">'+esc(name)+'</div>';
   html += '<div style="font-size:12px;color:var(--muted)">'+p.sessions.length+' جلسة • المتوسط '+(p.avg!==null?p.avg.toFixed(2):'—')+'/15</div></div>';
-  html += '<button class="btn" style="background:#117a65;color:#fff;font-size:12px" onclick="printStudentSummary(\''+encName+'\')">🖨️ تقرير الطالب</button>';
+  html += '<button class="btn" style="background:#117a65;color:#fff;font-size:12px" onclick="printStudentSummary(window.__progPrintEnc)">🖨️ تقرير الطالب</button>';
   html += '</div>';
 
   // PHASE 4: merge the derived flag-engine flags with the legacy risk list
@@ -3955,49 +3956,104 @@ function openStudentProfile(id){
   if(!s){ toast('لا يوجد طالب بهذا المعرف'); renderStudentProfiles(); return; }
   __profSelectedId=id;
   var tl=window.Selectors?Selectors.getStudentTimeline(id):[];
-  var graded=tl.filter(function(t){return t.total!=null;});
-  var avg=graded.length?(graded.reduce(function(a,t){return a+t.total;},0)/graded.length):null;
-  var present=tl.filter(function(t){return t.attendance==='present';}).length;
-  var absent=tl.filter(function(t){return t.attendance==='absent';}).length;
   var flags=[]; try{ if(window.Flags) flags=Flags.forStudent(id).map(function(f){return f.msg;}); }catch(e){}
-  var pf=s.profile||{};
+  var pf=s.profile||{}; var ov=pf.overrides||{};
   var entNames={1:'مراقبة',2:'إشراف مباشر',3:'إشراف غير مباشر',4:'مستقل',5:'يُشرف على غيره'};
 
+  // Effective per-day values: a manual override (P3) overlays the computed value
+  // for DISPLAY + the final grade only — the evaluation record itself is untouched.
+  function eff(t){ var o=ov[t.id]||{}; return {
+    total:(typeof o.total==='number')?o.total:t.total, totalOv:(typeof o.total==='number'),
+    att:(o.attendance||t.attendance), attOv:!!o.attendance }; }
+
+  // Group the timeline BY HOSPITAL, accumulating attendance days + grade.
+  var present=0,absent=0,finalSum=0,gradedDays=0,byHosp={},order=[];
+  tl.forEach(function(t){
+    var e=eff(t), raw=(window.eva&&eva.evaluations[t.id])||{};
+    var hid=raw.hospitalId||t.hospitalId||'__none';
+    var g=byHosp[hid]; if(!g){ g=byHosp[hid]={name:_profHospLabel(hid)||'غير محدّد',days:[],sum:0,present:0,absent:0,graded:0}; order.push(hid); }
+    g.days.push({t:t,e:e,raw:raw});
+    if(e.att==='present'){present++;g.present++;} else if(e.att==='absent'){absent++;g.absent++;}
+    if(e.total!=null){finalSum+=e.total;gradedDays++;g.sum+=e.total;g.graded++;}
+  });
+  var hospCount=order.length, maxPossible=gradedDays*15;
+
   var h='';
+  // action bar
   h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px">';
   h+='<button class="btn bo" onclick="backToProfilesRoster()">→ رجوع للقائمة</button>';
   h+='<button class="btn bp" onclick="openStudentFullReport(\''+esc(id)+'\')">📊 التحليل الكامل والرسوم</button>';
   h+='</div>';
-
   // header
   h+='<div style="background:linear-gradient(135deg,var(--primary),#0c5b52);color:#fff;border-radius:16px;padding:18px 20px;margin-bottom:14px">';
   h+='<div style="font-size:20px;font-weight:800">👤 '+esc(s.name||'—')+'</div>';
   var meta=[]; if(s.group) meta.push('المجموعة: '+esc(s.group)); if(s.area) meta.push(esc(s.area)); if(s.email) meta.push(esc(s.email)); meta.push(s.active===false?'غير نشط':'نشط');
   h+='<div style="font-size:12px;opacity:.92;margin-top:5px">'+meta.join(' • ')+'</div></div>';
 
-  // KPIs
-  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:14px">';
-  h+=_profKpi(avg!=null?avg.toFixed(1):'—','المتوسط /15','var(--primary)');
-  h+=_profKpi(present,'أيام حضور','var(--success)');
-  h+=_profKpi(absent,'أيام غياب',absent?'#c0504a':'var(--muted)');
-  h+=_profKpi(tl.length,'إجمالي الجلسات','var(--indigo)');
+  // Summary — attendance days + hospitals (NO average)
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-bottom:10px">';
+  h+=_profKpi(present,'أيام الحضور','var(--success)');
+  h+=_profKpi(absent,'أيام الغياب',absent?'#c0504a':'var(--muted)');
+  h+=_profKpi(hospCount,'المستشفيات','var(--indigo)');
+  h+='</div>';
+  // FINAL GRADE — prominent
+  h+='<div style="background:linear-gradient(135deg,#0f6e56,#0c5b52);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  h+='<span style="font-size:14px;font-weight:700;opacity:.92">🎓 الدرجة النهائية</span>';
+  h+='<span style="font-family:\'JetBrains Mono\',monospace;font-size:24px;font-weight:800">'+finalSum.toFixed(2)+' <span style="font-size:13px;opacity:.8">/ '+maxPossible.toFixed(0)+'</span></span>';
   h+='</div>';
 
   if(flags.length){
     h+='<div style="background:#fdf2f2;border:1px solid var(--danger);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px;color:var(--danger);font-weight:700">⚠️ '+flags.map(function(f){return esc(f);}).join(' • ')+'</div>';
   }
-
   var ents=tl.filter(function(t){return t.entrustment;});
-  if(ents.length){
-    var last=ents[ents.length-1].entrustment;
-    h+='<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:12px;padding:12px 14px;margin-bottom:14px">';
-    h+='<div style="font-size:13px;font-weight:800;color:#2563a8;margin-bottom:4px">🪜 مستوى الاستقلالية الحالي</div>';
-    h+='<div style="font-size:16px;font-weight:800;color:var(--primary)">'+last+' — '+(entNames[last]||'')+'</div>';
-    h+='<div style="font-size:12px;color:var(--muted);margin-top:3px">التسلسل: '+ents.map(function(t){return t.entrustment;}).join(' ← ')+'</div></div>';
+  if(ents.length){ var last=ents[ents.length-1].entrustment;
+    h+='<div style="background:var(--surface-2);border:1px solid var(--line-soft);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:13px"><b style="color:#2563a8">🪜 مستوى الاستقلالية:</b> '+last+' — '+(entNames[last]||'')+'</div>';
+  }
+
+  // ── ATTENDANCE & GRADES BY HOSPITAL (the core view; per-day details expand in between) ──
+  h+='<div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:8px">🏥 الحضور والدرجات حسب المستشفى</div>';
+  if(!tl.length){
+    h+='<div style="background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px">لا توجد سجلات لهذا الطالب بعد.</div>';
+  } else {
+    order.forEach(function(hid){
+      var g=byHosp[hid], subMax=g.graded*15;
+      h+='<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px">';
+      h+='<div style="background:#eef7f4;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+      h+='<span style="font-size:14px;font-weight:800;color:#0f6e56">🏥 '+esc(g.name)+'</span>';
+      h+='<span style="font-size:12px;color:var(--ink-2)">✓ '+g.present+' • ✗ '+g.absent+' • <b style="color:#0f6e56">المجموع '+g.sum.toFixed(2)+'/'+subMax.toFixed(0)+'</b></span>';
+      h+='</div><div style="padding:4px 8px">';
+      g.days.slice().sort(function(a,b){ return String(a.t.dateISO||a.t.legacyCycleDay||'').localeCompare(String(b.t.dateISO||b.t.legacyCycleDay||'')); }).forEach(function(d){
+        var t=d.t,e=d.e,raw=d.raw;
+        var totCol=e.total==null?'#aaa':e.total>=12?'var(--success)':e.total>=RISK_AVG?'var(--pl)':'var(--danger)';
+        var attTxt=e.att==='present'?'<span style="color:var(--success)">✓ حاضر</span>':e.att==='absent'?'<span style="color:var(--danger)">✗ غائب</span>':'<span style="color:var(--muted)">—</span>';
+        if(e.attOv) attTxt+=' <span title="مُعدّلة يدوياً" style="font-size:9px;color:#8a6d1a;background:#fff3d6;border-radius:6px;padding:0 4px">✎</span>';
+        var extra=[]; if(raw.unit) extra.push(esc(raw.unit)); if((raw.legacyCycleDay||t.legacyCycleDay)) extra.push('يوم '+esc(raw.legacyCycleDay||t.legacyCycleDay));
+        var dayLabel=esc(t.dateISO||('دورة يوم '+(t.legacyCycleDay||'?')))+(extra.length?(' • '+extra.join(' • ')):'');
+        h+='<details class="prof-day" style="border-bottom:1px solid var(--line-soft)">';
+        h+='<summary style="cursor:pointer;padding:9px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
+        h+='<span style="font-size:12.5px;color:var(--ink-2)">'+dayLabel+' &nbsp; '+attTxt+(t.paperDelivered===false?' • <span style="color:var(--warn)">ورقة ناقصة</span>':'')+'</span>';
+        h+='<span style="font-size:13px;font-weight:800;color:'+totCol+'">'+(e.total!=null?e.total.toFixed(2):'—')+'/15'+(e.totalOv?' <span title="مُعدّلة يدوياً" style="font-size:10px;color:#8a6d1a;background:#fff3d6;border-radius:6px;padding:1px 5px">معدّلة</span>':'')+'</span>';
+        h+='</summary>';
+        h+='<div style="padding:4px 10px 12px;background:var(--surface-2)">';
+        var sc=raw.scores||{}, hasScores=false;
+        h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px">';
+        (window.FIELDS||[]).forEach(function(f){
+          var mx=f.items.reduce(function(a,x){return a+x.m;},0), sum=0, has=false;
+          f.items.forEach(function(it){ if(sc[it.k]!==undefined){ sum+=parseFloat(sc[it.k])||0; has=true; } });
+          if(has) hasScores=true;
+          h+='<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px 9px"><div style="font-size:11px;color:var(--muted)">'+esc(f.s)+'</div><div style="font-size:14px;font-weight:800;color:var(--primary)">'+(has?sum.toFixed(2):'—')+' <span style="font-size:10px;color:var(--muted);font-weight:400">/ '+mx.toFixed(2)+'</span></div></div>';
+        });
+        h+='</div>';
+        if(!hasScores) h+='<div style="font-size:12px;color:var(--muted);margin-top:6px">لا يوجد تفصيل درجات لهذا اليوم.</div>';
+        if(raw.notes && String(raw.notes).trim()){ h+='<div style="font-size:12.5px;margin-top:8px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--ink-2)">📝 '+esc(raw.notes)+'</div>'; }
+        h+='</div></details>';
+      });
+      h+='</div></div>';
+    });
   }
 
   // ── EDITABLE descriptive section (P2) ──
-  h+='<div style="background:#fffdf5;border:1px solid #e8d9a8;border-radius:12px;padding:14px 16px;margin-bottom:16px">';
+  h+='<div style="background:#fffdf5;border:1px solid #e8d9a8;border-radius:12px;padding:14px 16px;margin:16px 0">';
   h+='<div style="font-size:14px;font-weight:800;color:#8a6d1a;margin-bottom:4px">✏️ ملاحظات وبيانات يدوية</div>';
   h+='<div style="font-size:11px;color:var(--muted);margin-bottom:10px">تُحفظ في ملف الطالب وتُزامَن سحابياً — لا تؤثّر على الدرجات أو الحضور المحسوبة.</div>';
   h+=_profField('ملاحظات المنسّق / المشرف','textarea','prof_note',pf.coordinatorNotes);
@@ -4012,31 +4068,6 @@ function openStudentProfile(id){
   if(pf.updatedAt){ h+='<span style="font-size:11px;color:var(--muted)">آخر تعديل: '+esc(pf.updatedBy||'')+' • '+esc(new Date(pf.updatedAt).toLocaleDateString('ar'))+'</span>'; }
   h+='</div></div>';
 
-  // ── Evaluations timeline (auto, newest first) with rotation + daily note ──
-  h+='<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:8px">📅 سجل التقييمات اليومية</div>';
-  if(!tl.length){
-    h+='<div style="background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px">لا توجد تقييمات مسجّلة لهذا الطالب بعد.</div>';
-  } else {
-    h+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
-    tl.slice().reverse().forEach(function(t){
-      var raw=(window.eva&&eva.evaluations[t.id])||{};
-      var rot=[]; var hl=_profHospLabel(raw.hospitalId||t.hospitalId); if(hl) rot.push(esc(hl));
-      if(raw.legacyCycleDay||t.legacyCycleDay) rot.push('يوم '+esc(raw.legacyCycleDay||t.legacyCycleDay));
-      if(raw.unit) rot.push(esc(raw.unit));
-      var totCol=t.total==null?'#aaa':t.total>=12?'var(--success)':t.total>=RISK_AVG?'var(--pl)':'var(--danger)';
-      var att=t.attendance==='present'?'<span style="color:var(--success)">✓ حاضر</span>':t.attendance==='absent'?'<span style="color:var(--danger)">✗ غائب</span>':'<span style="color:var(--muted)">— لم يُسجَّل</span>';
-      h+='<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px">';
-      h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">';
-      h+='<span style="font-size:13px;font-weight:700">'+esc(t.dateISO||('دورة يوم '+(t.legacyCycleDay||'?')))+'</span>';
-      h+='<span style="font-size:13px;font-weight:800;color:'+totCol+'">'+(t.total!=null?t.total.toFixed(2):'—')+' /15</span>';
-      h+='</div>';
-      h+='<div style="font-size:12px;color:var(--muted);margin-top:3px">'+att+(rot.length?(' • '+rot.join(' • ')):'')+(t.paperDelivered===false?' • <span style="color:var(--warn)">ورقة غير مُسلّمة</span>':'')+'</div>';
-      if(raw.notes && String(raw.notes).trim()){ h+='<div style="font-size:12.5px;margin-top:6px;background:var(--surface-2);border-radius:8px;padding:7px 9px;color:var(--ink-2)">📝 '+esc(raw.notes)+'</div>'; }
-      h+='</div>';
-    });
-    h+='</div>';
-  }
-
   host.innerHTML=h;
 }
 
@@ -4046,6 +4077,16 @@ function openStudentFullReport(id){
   var s=(window.eva&&eva.students[id])||null;
   if(!s){ toast('لا يوجد طالب بهذا المعرف'); return; }
   openProgressDetail(encodeURIComponent(s.name||''), id);
+}
+// Progress-tab rows call this instead of embedding the free-text name in an
+// inline onclick (XSS-safe): the name/id come from data-* attributes read at
+// click time, and routing by id also disambiguates same-named students.
+function openProgRowFromEl(el){
+  if(!el) return;
+  var sid=el.getAttribute('data-sid');
+  if(sid){ openStudentFullReport(sid); return; }
+  var nm=el.getAttribute('data-full')||'';
+  openProgressDetail(encodeURIComponent(nm));
 }
 
 // ── P2: persist the descriptive edits (audited + synced; computed data untouched) ──
