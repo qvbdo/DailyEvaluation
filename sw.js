@@ -10,7 +10,11 @@
        app's own offline queue + live sync handle those.
    Bump CACHE_VERSION whenever you change cached files to force an update.
    ────────────────────────────────────────────────────────────────────── */
-const CACHE_VERSION = 'hsp-v9';
+const CACHE_VERSION = 'hsp-v10';
+// The login background video lives in its OWN stable cache so bumping
+// CACHE_VERSION (frequent) never re-downloads the ~9.6MB file.
+const MEDIA_CACHE = 'hsp-media-v1';
+const MEDIA = ['/login-bg.mp4'];
 const PRECACHE = [
   '/index.html',
   '/offline.html',
@@ -32,9 +36,12 @@ const PRECACHE = [
 
 self.addEventListener('install', function(event) {
   event.waitUntil(
-    caches.open(CACHE_VERSION)
-      .then(function(cache) { return cache.addAll(PRECACHE); })
-      .then(function() { return self.skipWaiting(); })
+    Promise.all([
+      caches.open(CACHE_VERSION).then(function(cache) { return cache.addAll(PRECACHE); }),
+      // best-effort: cache the login video so it works offline; a failure here
+      // must never block install (it just falls back to the black background).
+      caches.open(MEDIA_CACHE).then(function(cache) { return cache.addAll(MEDIA).catch(function(){}); })
+    ]).then(function() { return self.skipWaiting(); })
       .catch(function() { /* precache failure shouldn't block install */ })
   );
 });
@@ -43,7 +50,7 @@ self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(keys) {
       return Promise.all(
-        keys.filter(function(k) { return k !== CACHE_VERSION; })
+        keys.filter(function(k) { return k !== CACHE_VERSION && k !== MEDIA_CACHE; })
             .map(function(k) { return caches.delete(k); })
       );
     }).then(function() { return self.clients.claim(); })
@@ -66,6 +73,15 @@ self.addEventListener('fetch', function(event) {
   // Never touch cross-origin requests — Firebase, the upload proxy, Google
   // auth, and CDNs must always go straight to the network.
   if (url.origin !== self.location.origin) return;
+
+  // Login video: cache-first from the stable media cache so it plays offline.
+  // ignoreVary lets a range request match the full precached response.
+  if (url.pathname === '/login-bg.mp4') {
+    event.respondWith(
+      caches.match(req, { ignoreVary: true }).then(function(cached) { return cached || fetch(req); })
+    );
+    return;
+  }
 
   // Navigations: network-first with cached index.html fallback.
   if (req.mode === 'navigate') {
