@@ -10,7 +10,7 @@
        app's own offline queue + live sync handle those.
    Bump CACHE_VERSION whenever you change cached files to force an update.
    ────────────────────────────────────────────────────────────────────── */
-const CACHE_VERSION = 'hsp-v8';
+const CACHE_VERSION = 'hsp-v9';
 const PRECACHE = [
   '/index.html',
   '/offline.html',
@@ -57,6 +57,11 @@ self.addEventListener('fetch', function(event) {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // Firebase auth helper paths (/__/auth/*, /__/firebase/*) are reverse-proxied
+  // to firebaseapp.com via vercel.json. They are same-origin, so they must be
+  // explicitly bypassed here — caching the auth handler/iframe breaks sign-in.
+  if (url.pathname.indexOf('/__/') === 0) return;
 
   // Never touch cross-origin requests — Firebase, the upload proxy, Google
   // auth, and CDNs must always go straight to the network.
