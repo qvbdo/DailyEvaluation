@@ -1591,36 +1591,35 @@ function signIn() {
     provider.addScope('email');
     provider.addScope('profile');
 
-    // Detect mobile/iPad — use redirect instead of popup
-    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-    if (isMobile) {
-      // Redirect method — works on all mobile browsers including Safari on iPad
-      auth.signInWithRedirect(provider).catch(function(err) {
-        document.getElementById('loginErr').style.display = 'block';
-        document.getElementById('loginErr').textContent = 'خطأ: ' + err.message;
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:22px;height:22px" alt="Google"> تسجيل الدخول بـ Google';
-        }
-      });
-    } else {
-      // Popup method — better UX on desktop
-      auth.signInWithPopup(provider).catch(function(err) {
-        // If popup blocked, fall back to redirect
-        if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-          auth.signInWithRedirect(provider);
-        } else {
-          document.getElementById('loginErr').style.display = 'block';
-          document.getElementById('loginErr').textContent = 'خطأ: ' + err.message;
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:22px;height:22px" alt="Google"> تسجيل الدخول بـ Google';
-          }
-        }
-      });
+    function restoreBtn() {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:22px;height:22px" alt="Google"> تسجيل الدخول بـ Google';
+      }
     }
+    function showErr(msg) {
+      var e = document.getElementById('loginErr');
+      e.style.display = 'block';
+      e.textContent = 'خطأ: ' + msg;
+    }
+
+    // POPUP on EVERY device (desktop, phone, iPad). When the app is served from
+    // a domain different from the Firebase authDomain (e.g. Vercel), redirect
+    // sign-in silently fails in browsers that block third-party storage — the
+    // user returns to the login page unsigned. Popup passes the result back via
+    // window messaging (no third-party cookies), so it completes cross-domain.
+    // Ref: https://firebase.google.com/docs/auth/web/redirect-best-practices
+    auth.signInWithPopup(provider).catch(function(err) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        restoreBtn(); // user dismissed the popup — just reset, no error
+      } else if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
+        // Popup unavailable — redirect is the only remaining path (may still be
+        // blocked by third-party-storage rules on some browsers).
+        auth.signInWithRedirect(provider).catch(function(e2) { showErr(e2.message); restoreBtn(); });
+      } else {
+        showErr(err.message); restoreBtn();
+      }
+    });
   });
 }
 
