@@ -3579,7 +3579,7 @@ function renderProgress(){
     atRisk.forEach(function(n){
       var p = prof[n];
       html += '<div style="background:#fff;border:1px solid #f0c9c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer" data-full="'+esc(n)+'" data-sid="'+esc(studentIdByName(n)||'')+'" onclick="openProgRowFromEl(this)">';
-      html += '<span style="font-weight:600;font-size:14px">'+n+'</span>';
+      html += '<span style="font-weight:600;font-size:14px">'+esc(n)+'</span>';
       html += '<span style="font-size:12px;color:var(--danger)">'+p.risk.join(' • ')+'</span>';
       html += '</div>';
     });
@@ -3971,12 +3971,16 @@ function openStudentProfile(id){
   tl.forEach(function(t){
     var e=eff(t), raw=(window.eva&&eva.evaluations[t.id])||{};
     var hid=raw.hospitalId||t.hospitalId||'__none';
-    var g=byHosp[hid]; if(!g){ g=byHosp[hid]={name:_profHospLabel(hid)||'غير محدّد',days:[],sum:0,present:0,absent:0,graded:0}; order.push(hid); }
+    var g=byHosp[hid]; if(!g){ g=byHosp[hid]={name:(hid==='__none'?'غير محدّد':(_profHospLabel(hid)||'غير محدّد')),days:[],sum:0,present:0,absent:0,graded:0}; order.push(hid); }
     g.days.push({t:t,e:e,raw:raw});
     if(e.att==='present'){present++;g.present++;} else if(e.att==='absent'){absent++;g.absent++;}
     if(e.total!=null){finalSum+=e.total;gradedDays++;g.sum+=e.total;g.graded++;}
   });
   var hospCount=order.length, maxPossible=gradedDays*15;
+  // render-scoped lookup arrays so per-day/per-hospital controls key by SAFE
+  // numeric index (never the raw evalId/hospitalId, which can carry unescaped
+  // characters from a free-text hospital name → id-attribute XSS).
+  window.__profDayIds=[]; window.__profHospIds=[];
 
   var h='';
   // action bar
@@ -4019,14 +4023,19 @@ function openStudentProfile(id){
     h+='<div style="background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:18px;text-align:center;color:var(--muted);font-size:13px">لا توجد سجلات لهذا الطالب بعد.</div>';
   } else {
     order.forEach(function(hid){
-      var g=byHosp[hid], subMax=g.graded*15;
+      var g=byHosp[hid], subMax=g.graded*15, hi=window.__profHospIds.push(hid)-1;
       h+='<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px">';
       h+='<div style="background:#eef7f4;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
       h+='<span style="font-size:14px;font-weight:800;color:#0f6e56">🏥 '+esc(g.name)+'</span>';
       h+='<span style="font-size:12px;color:var(--ink-2)">✓ '+g.present+' • ✗ '+g.absent+' • <b style="color:#0f6e56">المجموع '+g.sum.toFixed(2)+'/'+subMax.toFixed(0)+'</b></span>';
       h+='</div><div style="padding:4px 8px">';
-      g.days.slice().sort(function(a,b){ return String(a.t.dateISO||a.t.legacyCycleDay||'').localeCompare(String(b.t.dateISO||b.t.legacyCycleDay||'')); }).forEach(function(d){
-        var t=d.t,e=d.e,raw=d.raw;
+      g.days.slice().sort(function(a,b){
+        var ka=a.t.dateISO||'', kb=b.t.dateISO||'';
+        if(ka&&kb) return ka<kb?-1:ka>kb?1:0;
+        if(ka&&!kb) return -1; if(!ka&&kb) return 1;
+        return (parseInt(a.t.legacyCycleDay,10)||0)-(parseInt(b.t.legacyCycleDay,10)||0);
+      }).forEach(function(d){
+        var t=d.t,e=d.e,raw=d.raw, di=window.__profDayIds.push(t.id)-1;
         var totCol=e.total==null?'#aaa':e.total>=12?'var(--success)':e.total>=RISK_AVG?'var(--pl)':'var(--danger)';
         var attTxt=e.att==='present'?'<span style="color:var(--success)">✓ حاضر</span>':e.att==='absent'?'<span style="color:var(--danger)">✗ غائب</span>':'<span style="color:var(--muted)">—</span>';
         if(e.attOv) attTxt+=' <span title="مُعدّلة يدوياً" style="font-size:9px;color:#8a6d1a;background:#fff3d6;border-radius:6px;padding:0 4px">✎</span>';
@@ -4055,10 +4064,10 @@ function openStudentProfile(id){
         h+='<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">';
         h+='<div style="font-size:11px;color:#8a6d1a;font-weight:700;margin-bottom:5px">✎ تصحيح يدوي (اختياري — يُعرَض كقيمة «معدّلة» ولا يغيّر السجل الأصلي)</div>';
         h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
-        h+='<label style="font-size:11px">الدرجة: <input type="number" step="0.25" min="0" max="15" id="ov_total_'+t.id+'" value="'+(typeof oo.total==='number'?oo.total:'')+'" placeholder="—" style="width:72px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"></label>';
-        h+='<label style="font-size:11px">الحضور: <select id="ov_att_'+t.id+'" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"><option value="">— كما هو —</option><option value="present"'+(oo.attendance==='present'?' selected':'')+'>حاضر</option><option value="absent"'+(oo.attendance==='absent'?' selected':'')+'>غائب</option></select></label>';
-        h+='<button class="btn bp" style="font-size:11px;padding:5px 10px" onclick="saveDayOverride(\''+esc(id)+'\',\''+esc(t.id)+'\')">حفظ التصحيح</button>';
-        if(oo.total!=null||oo.attendance){ h+='<button class="btn bo" style="font-size:11px;padding:5px 10px" onclick="clearDayOverride(\''+esc(id)+'\',\''+esc(t.id)+'\')">إلغاء التصحيح</button>'; }
+        h+='<label style="font-size:11px">الدرجة: <input type="number" step="0.25" min="0" max="15" id="ov_total_'+di+'" value="'+(typeof oo.total==='number'?oo.total:'')+'" placeholder="—" style="width:72px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"></label>';
+        h+='<label style="font-size:11px">الحضور: <select id="ov_att_'+di+'" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"><option value="">— كما هو —</option><option value="present"'+(oo.attendance==='present'?' selected':'')+'>حاضر</option><option value="absent"'+(oo.attendance==='absent'?' selected':'')+'>غائب</option></select></label>';
+        h+='<button class="btn bp" style="font-size:11px;padding:5px 10px" onclick="saveDayOverride(\''+esc(id)+'\','+di+')">حفظ التصحيح</button>';
+        if(oo.total!=null||oo.attendance){ h+='<button class="btn bo" style="font-size:11px;padding:5px 10px" onclick="clearDayOverride(\''+esc(id)+'\','+di+')">إلغاء التصحيح</button>'; }
         h+='</div></div>';
         h+='</div></details>';
       });
@@ -4066,8 +4075,8 @@ function openStudentProfile(id){
       // P4: per-hospital rotation note (editable, per student)
       h+='<div style="padding:8px 12px;border-top:1px solid var(--line-soft);background:#fafdfc">';
       h+='<label style="font-size:11px;color:#0f6e56;font-weight:700;display:block;margin-bottom:4px">📝 ملاحظة الدورة — خاصة بهذا المستشفى</label>';
-      h+='<textarea id="rot_note_'+esc(hid)+'" placeholder="ملاحظة عن أداء الطالب في هذه الدورة..." style="width:100%;min-height:42px;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12.5px;resize:vertical">'+esc((pf.rotationNotes&&pf.rotationNotes[hid])||'')+'</textarea>';
-      h+='<button class="btn bp" style="font-size:11px;padding:5px 10px;margin-top:5px" onclick="saveRotationNote(\''+esc(id)+'\',\''+esc(hid)+'\')">حفظ الملاحظة</button>';
+      h+='<textarea id="rot_note_'+hi+'" placeholder="ملاحظة عن أداء الطالب في هذه الدورة..." style="width:100%;min-height:42px;border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12.5px;resize:vertical">'+esc((pf.rotationNotes&&pf.rotationNotes[hid])||'')+'</textarea>';
+      h+='<button class="btn bp" style="font-size:11px;padding:5px 10px;margin-top:5px" onclick="saveRotationNote(\''+esc(id)+'\','+hi+')">حفظ الملاحظة</button>';
       h+='</div>';
       h+='</div>'; // close card
     });
@@ -4133,10 +4142,11 @@ function saveStudentProfileEdit(id){
 }
 
 // ── P3: manual override of a computed day value (overlay; record untouched) ──
-function saveDayOverride(sid, evalId){
+function saveDayOverride(sid, di){
   if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
   if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
-  var tEl=document.getElementById('ov_total_'+evalId), aEl=document.getElementById('ov_att_'+evalId);
+  var evalId=(window.__profDayIds||[])[di]; if(!evalId){ toast('تعذّر الحفظ'); return; }
+  var tEl=document.getElementById('ov_total_'+di), aEl=document.getElementById('ov_att_'+di);
   var tv=tEl?String(tEl.value||'').trim():'', av=aEl?aEl.value:'';
   var o={};
   if(tv!==''){ var n=parseFloat(tv); if(!isNaN(n)) o.total=Math.max(0,Math.min(15,Math.round(n*100)/100)); }
@@ -4151,9 +4161,10 @@ function saveDayOverride(sid, evalId){
   toast(Object.keys(o).length?'✓ حُفِظ التصحيح اليدوي':'أُزيل التصحيح');
   openStudentProfile(sid);
 }
-function clearDayOverride(sid, evalId){
+function clearDayOverride(sid, di){
   if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
   if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
+  var evalId=(window.__profDayIds||[])[di]; if(!evalId){ toast('تعذّر الحفظ'); return; }
   var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
   Store.update('students.'+sid, function(st){
     if(st.profile && st.profile.overrides){ delete st.profile.overrides[evalId]; st.profile.updatedAt=Date.now(); st.profile.updatedBy=who; }
@@ -4164,10 +4175,11 @@ function clearDayOverride(sid, evalId){
 }
 
 // ── P4: per-hospital rotation note ──
-function saveRotationNote(sid, hid){
+function saveRotationNote(sid, hi){
   if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
   if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
-  var el=document.getElementById('rot_note_'+hid); var v=el?String(el.value||'').trim():'';
+  var hid=(window.__profHospIds||[])[hi]; if(hid==null){ toast('تعذّر الحفظ'); return; }
+  var el=document.getElementById('rot_note_'+hi); var v=el?String(el.value||'').trim():'';
   var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
   Store.update('students.'+sid, function(st){
     st.profile=st.profile||{}; st.profile.rotationNotes=st.profile.rotationNotes||{};
@@ -4217,17 +4229,25 @@ function mergeStudents(sourceId, targetId){
       moved++;
     }
   });
-  // merge profile: fill the target's blanks from the source; union overrides/notes
+  // merge profile: fill the target's blanks from the source; union notes; and
+  // RE-KEY the source's per-day overrides ('_sourceId' -> '_targetId') so they
+  // still match the just-re-keyed evaluations (target's own overrides win).
   Store.update('students.'+targetId, function(st){
     st.profile=st.profile||{}; var sp=src.profile||{};
     ['coordinatorNotes','goals','contactEmail','contactPhone','bio'].forEach(function(f){ if(!st.profile[f] && sp[f]) st.profile[f]=sp[f]; });
-    st.profile.overrides=Object.assign({}, sp.overrides||{}, st.profile.overrides||{});
+    var reOv={}; Object.keys(sp.overrides||{}).forEach(function(ok){
+      var nk=(ok.slice(-(sourceId.length+1))==='_'+sourceId)?(ok.slice(0,ok.length-sourceId.length)+targetId):ok;
+      reOv[nk]=sp.overrides[ok];
+    });
+    st.profile.overrides=Object.assign({}, reOv, st.profile.overrides||{});
     st.profile.rotationNotes=Object.assign({}, sp.rotationNotes||{}, st.profile.rotationNotes||{});
     st.profile.updatedAt=Date.now(); st.profile.updatedBy=who;
     return st;
   }, { action:'merge:profile' });
+  // drop the source's now-orphaned flags so no phantom card lingers on Home
+  if(window.eva.flags && window.eva.flags[sourceId]) Store.remove('flags.'+sourceId, { action:'merge:flags' });
   Store.remove('students.'+sourceId, { action:'merge:removeStudent' });
-  if(window.bus) bus.emit('students:changed', {});
+  if(window.bus){ bus.emit('students:changed', {}); bus.emit('evaluation:saved', { merged:true }); }
   toast('✓ تم الدمج — نُقل '+moved+' سجل');
   __profSelectedId=null; renderStudentProfiles();
 }

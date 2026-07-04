@@ -96,10 +96,15 @@
       }).catch(function () { flushing = false; setSync('offline'); });
     },
 
-    /* pull remote eva/* into local on (re)connect, then flush local queue */
+    /* on (re)connect: flush the local queue FIRST (so local deletions —
+       e.g. a merge's source-key tombstones — reach the server before we pull),
+       THEN pull remote eva/* into local. Pulling first would resurrect keys
+       that were deleted locally but whose tombstone hadn't flushed yet. */
     verify: function () {
       if (!online()) return Promise.resolve();
-      return evaRef('evaluations').once('value').then(function (snap) {
+      return Sync.flush().then(function () {
+        return evaRef('evaluations').once('value');
+      }).then(function (snap) {
         var remote = snap.val() || {};
         var changed = false;
         Object.keys(remote).forEach(function (id) {
@@ -107,7 +112,6 @@
           if (!l || (r.updatedAt || 0) > (l.updatedAt || 0)) { window.eva.evaluations[id] = r; changed = true; }
         });
         if (changed) window.bus.emit('evaluation:saved', { synced: true });
-        return Sync.flush();
       }).catch(function () {});
     },
 
