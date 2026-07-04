@@ -400,6 +400,64 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
   .sync-bar{padding:5px 7px;min-width:0}
 }
 </style>
+
+<!-- ══ "Wanderful Hero" login (from the Claude Design import) — full-screen
+     video, glass accents, wired to the existing signIn()/enterOfflineMode(). ══ -->
+<style id="wf-login">
+#loginScreen{position:fixed;inset:0;z-index:200;background:#000;color:#fff;overflow:hidden;
+  direction:ltr;font-family:"Inter",system-ui,sans-serif;
+  flex-direction:column;align-items:center;justify-content:center}
+.wf-bg{position:fixed;inset:0;z-index:0;overflow:hidden;transform:scale(1.08);transform-origin:center;background:#000}
+.wf-bg video{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 1.1s ease}
+.wf-bg video.wf-ready{opacity:1}
+.wf-scrim{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(1200px 820px at 50% 42%,rgba(0,0,0,.10),rgba(0,0,0,.5) 72%),
+    linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,.22) 32%,rgba(0,0,0,.62))}
+.wf-header{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;
+  justify-content:space-between;gap:16px;
+  padding:calc(env(safe-area-inset-top) + 24px) 34px 24px}
+.wf-brand{font-size:16px;font-weight:600;letter-spacing:-.01em;color:#fff;line-height:1.25}
+.wf-pill{border-radius:9999px;padding:9px 18px;font-size:11px;font-weight:500;letter-spacing:.14em;
+  text-transform:uppercase;color:rgba(255,255,255,.9);white-space:nowrap}
+.wf-center{position:relative;z-index:20;text-align:center;padding:24px;max-width:920px;
+  animation:wfRise 1s cubic-bezier(.22,1,.36,1) both}
+.wf-hero{margin:0 0 34px;font-family:"Inter",sans-serif;font-weight:400;
+  font-size:clamp(34px,5.4vw,72px);line-height:1.08;letter-spacing:-.02em;color:#fff}
+.wf-hero span{display:block}
+.wf-hero-dim{color:rgba(255,255,255,.58)}
+.wf-auth{animation:wfRise 1s cubic-bezier(.22,1,.36,1) .28s both}
+.wf-stack{display:flex;flex-direction:column;align-items:center;gap:12px}
+.wf-checking{font-size:13px;letter-spacing:.05em;color:rgba(255,255,255,.72)}
+#loginScreen .google-btn{display:flex;align-items:center;justify-content:center;gap:10px;border:none;
+  cursor:pointer;border-radius:9999px;padding:13px 26px;font-size:14px;font-weight:500;
+  font-family:"Inter",sans-serif;letter-spacing:.01em;white-space:nowrap;min-width:min(280px,86vw);
+  transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s,filter .2s}
+#loginScreen .wf-btn-white{background:#fff;color:#1f1f1f;box-shadow:0 4px 18px rgba(0,0,0,.35)}
+#loginScreen .wf-btn-white:hover{transform:translateY(-1px);box-shadow:0 9px 26px rgba(0,0,0,.44)}
+#loginScreen .wf-btn-glass{color:#fff;padding:12px 26px}
+#loginScreen .wf-btn-glass:hover{transform:translateY(-1px);filter:brightness(1.15)}
+#loginScreen .google-btn:active{transform:translateY(0) scale(.98)}
+#loginScreen .login-err{display:none;color:#ff8a9c;font-size:13px;margin-top:2px}
+.wf-offline-note{background:rgba(240,181,74,.14);border:1px solid rgba(240,181,74,.4);color:#ffe2a8;
+  border-radius:12px;padding:9px 14px;font-size:13px;max-width:340px;line-height:1.5}
+.wf-offline-hint{font-size:12px;color:rgba(255,255,255,.6)}
+@keyframes wfRise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+/* liquid glass — from the imported design */
+.liquid-glass{background:rgba(255,255,255,.02);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:none;box-shadow:inset 0 1px 1px rgba(255,255,255,.12);position:relative;overflow:hidden}
+.liquid-glass::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+  background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,.15) 20%,rgba(255,255,255,0) 40%,
+    rgba(255,255,255,0) 60%,rgba(255,255,255,.15) 80%,rgba(255,255,255,.45));
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+@media(prefers-reduced-motion:reduce){ .wf-center,.wf-auth{animation:none} .wf-bg{transform:none} }
+@media(max-width:640px){
+  .wf-header{padding:calc(env(safe-area-inset-top) + 16px) 18px 16px}
+  .wf-brand{font-size:12.5px;max-width:58%}
+  .wf-pill{display:none}
+  .wf-hero{font-size:clamp(30px,8.2vw,46px);margin-bottom:26px}
+}
+</style>
 </head>
 <body>
 
@@ -409,64 +467,87 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
   <div style="font-size:14px;color:var(--muted)">جاري التحميل...</div>
 </div>
 
-<!-- LOGIN — UNIFIED: auto-detects connectivity, both options always available -->
-<div class="login-screen" id="loginScreen" style="display:none">
-  <!-- static gradient field (CSS only — works fully offline) -->
-  <div class="login-overlay"></div>
-
-  <!-- top bar: Eva wordmark + faculty affiliation -->
-  <div class="login-topbar">
-    <span class="login-wordmark">Eva</span>
-    <span class="login-affil">كلية التمريض · جامعة بغداد</span>
+<!-- LOGIN — "Wanderful Hero": full-screen video + auto-detects connectivity -->
+<div id="loginScreen" dir="ltr" style="display:none">
+  <!-- fullscreen video background (parallax on desktop) with a black fallback -->
+  <div class="wf-bg">
+    <video id="wfVideo" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260510_060007_60275ce7-030c-4668-a160-8f364ec537d3.mp4" autoplay muted loop playsinline preload="auto"></video>
   </div>
+  <div class="wf-scrim"></div>
 
-  <!-- centred hero + login actions -->
-  <div class="login-stage">
-    <h1 class="login-hero animate-fade-rise">إيفا — تقييم الممارسة <em>السريرية اليومية</em></h1>
+  <!-- header: faculty wordmark + glass pill -->
+  <header class="wf-header">
+    <div class="wf-brand">College of Nursing&nbsp;·&nbsp;University of Baghdad</div>
+    <span class="wf-pill liquid-glass">Clinical Practice Assessment</span>
+  </header>
 
-  <div class="login-card animate-fade-rise-delay-2">
-    <div class="logo">🏥</div>
-    <h2>تقييم الممارسة اليومية</h2>
+  <!-- centred hero + sign-in actions -->
+  <div class="wf-center">
+    <h1 class="wf-hero">
+      <span>There is nothing worse</span>
+      <span class="wf-hero-dim">than incompetent teacher</span>
+    </h1>
 
-    <!-- Shown while detecting connectivity -->
-    <div id="checkingSection" style="padding:10px 0;color:var(--muted);font-size:14px">
-      ⏳ جارٍ التحقق من الاتصال...
-    </div>
+    <div class="wf-auth">
+      <!-- detecting connectivity -->
+      <div id="checkingSection" class="wf-checking">Checking connection…</div>
 
-    <!-- ONLINE SECTION -->
-    <div id="onlineSection" style="display:none">
-      <p style="margin-bottom:16px;font-size:13px;color:var(--muted)">متصل بالإنترنت — بياناتك تُزامَن على جميع أجهزتك</p>
-      <button class="google-btn" onclick="signIn()">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width:22px;height:22px">
-        تسجيل الدخول بـ Google
-      </button>
-      <div class="login-err" id="loginErr" style="margin-top:10px">حدث خطأ في تسجيل الدخول. حاول مرة أخرى.</div>
-      <div class="offline-sep" style="display:flex;margin:14px 0;align-items:center;gap:8px;color:var(--muted);font-size:12px">
-        <div style="flex:1;height:1px;background:var(--border)"></div>
-        أو
-        <div style="flex:1;height:1px;background:var(--border)"></div>
+      <!-- ONLINE: Google + Local -->
+      <div id="onlineSection" style="display:none">
+        <div class="wf-stack">
+          <button class="google-btn wf-btn wf-btn-white" onclick="signIn()">
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path></svg>
+            <span>Sign in with Google</span>
+          </button>
+          <button class="google-btn wf-btn wf-btn-glass liquid-glass" onclick="enterOfflineMode()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="12" x="3" y="4" rx="2"></rect><path d="M2 20h20"></path></svg>
+            <span>Sign in without account (Local)</span>
+          </button>
+          <div class="login-err" id="loginErr">Sign-in failed. Please try again.</div>
+        </div>
       </div>
-      <button class="google-btn" onclick="enterOfflineMode()" style="color:var(--muted);font-size:13px;border-color:var(--border);justify-content:center">
-        📴 دخول بدون حساب (بيانات محلية فقط)
-      </button>
-    </div>
 
-    <!-- OFFLINE SECTION -->
-    <div id="offlineSection" style="display:none">
-      <div style="background:#fef9ec;border:1px solid #f0c040;border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:13px;color:#7d5a00">
-        ⚠️ لا يوجد اتصال بالإنترنت
-      </div>
-      <p style="margin-bottom:18px;font-size:13px;color:var(--muted)">البيانات تُحفظ في هذا المتصفح على هذا الجهاز</p>
-      <button class="google-btn" onclick="enterOfflineMode()" style="background:var(--primary);color:#fff;border-color:var(--primary);justify-content:center;font-size:15px">
-        🏥 دخول مباشر
-      </button>
-      <div style="margin-top:14px;font-size:12px;color:#888;text-align:center;line-height:1.7">
-        عند عودة الاتصال، أعد تحميل الصفحة لتسجيل الدخول بـ Google
+      <!-- OFFLINE: Local only -->
+      <div id="offlineSection" style="display:none">
+        <div class="wf-stack">
+          <div class="wf-offline-note">⚠ You're offline — data is saved locally on this device</div>
+          <button class="google-btn wf-btn wf-btn-white" onclick="enterOfflineMode()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1f1f1f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="12" x="3" y="4" rx="2"></rect><path d="M2 20h20"></path></svg>
+            <span>Enter (Local mode)</span>
+          </button>
+          <div class="wf-offline-hint">Reconnect and reload to sign in with Google</div>
+        </div>
       </div>
     </div>
   </div>
-  </div><!-- /login-stage -->
 </div>
+<script>
+/* Wanderful Hero — vanilla parallax for the login video (converted from the
+   Claude Design DCLogic component; runs only while the login is visible). */
+(function(){
+  var v=document.getElementById('wfVideo'); if(!v) return;
+  v.addEventListener('loadedmetadata',function(){ try{ v.playbackRate=1.25; }catch(e){} });
+  v.addEventListener('canplay',function(){ v.classList.add('wf-ready'); });
+  v.addEventListener('error',function(){ var b=v.parentNode; if(b) b.style.display='none'; });
+  try{ var p=v.play(); if(p&&p.catch) p.catch(function(){}); }catch(e){}
+  if(window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return; // no parallax on touch
+  var tX=0,tY=0,cX=0,cY=0,running=false;
+  function loginVisible(){ var ls=document.getElementById('loginScreen'); return ls && ls.style.display!=='none'; }
+  function tick(){
+    if(!loginVisible()){ running=false; return; } // suspend the rAF loop once the login is dismissed
+    cX+=(tX-cX)*0.06; cY+=(tY-cY)*0.06;
+    v.style.transform='translate3d('+cX.toFixed(2)+'px,'+cY.toFixed(2)+'px,0)';
+    requestAnimationFrame(tick);
+  }
+  function start(){ if(!running && loginVisible()){ running=true; requestAnimationFrame(tick); } }
+  window.addEventListener('mousemove',function(e){
+    var cx=window.innerWidth/2, cy=window.innerHeight/2;
+    tX=((e.clientX-cx)/cx)*18; tY=((e.clientY-cy)/cy)*18;
+    start();
+  },{passive:true});
+  start();
+})();
+</script>
 
 <!-- APP -->
 <div id="appRoot" style="display:none">
@@ -1608,24 +1689,22 @@ function onNetworkOffline() {
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────
+var WF_GOOGLE_BTN_HTML = '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path></svg><span>Sign in with Google</span>';
 function signIn() {
   var btn = document.querySelector('#onlineSection .google-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ جارٍ التحميل...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
   loadFirebase(function() {
     var provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
 
     function restoreBtn() {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:22px;height:22px" alt="Google"> تسجيل الدخول بـ Google';
-      }
+      if (btn) { btn.disabled = false; btn.innerHTML = WF_GOOGLE_BTN_HTML; }
     }
     function showErr(msg) {
       var e = document.getElementById('loginErr');
       e.style.display = 'block';
-      e.textContent = 'خطأ: ' + msg;
+      e.textContent = 'Sign-in error: ' + msg;
     }
 
     // POPUP on EVERY device (desktop, phone, iPad). When the app is served from
