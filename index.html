@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Eva — تقييم الممارسة اليومية</title>
 <!-- Velorah design system fonts: Cairo (Arabic) + Instrument Serif (cinematic display) + Inter (Latin UI) + JetBrains Mono (numeric data) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -354,6 +354,35 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 /* ════════ HEADINGS ════════ */
 .content-area h2,.content-area h3{font-family:"Cairo",sans-serif}
 </style>
+
+<!-- Adaptive shell overrides — re-assert the drawer geometry over the skin's
+     sidebar look (the skin block above sets top/padding/radius on .sidenav).
+     Core drawer mechanics (position/transform/width) live in styles.css. -->
+<style id="responsive-shell">
+.sidenav{flex:none;top:0;border:none;border-inline-end:1px solid var(--border);
+  border-radius:0;box-shadow:none;padding:12px;
+  padding-top:calc(env(safe-area-inset-top) + 12px);
+  padding-bottom:calc(env(safe-area-inset-bottom) + 16px)}
+body.nav-open .sidenav{box-shadow:var(--sh-3)}
+/* per-session fields tucked into the drawer */
+.drawer-session{margin-top:12px}
+.drawer-session .hl{display:block;padding:6px 4px 3px;font-size:11px}
+.drawer-session .hinput{width:100%;font-size:13px;padding:9px 11px}
+.drawer-field-row{display:flex;gap:6px}
+.drawer-field-row #hName{flex:1 1 auto;min-width:0}
+.drawer-field-row #hNo{flex:0 0 68px;text-align:center}
+/* slim the header on phones so a tab truly fills the screen */
+@media(max-width:768px){
+  .hdr-top{padding:9px 12px}
+  .hdr-bar{padding:7px 12px;gap:8px}
+  .main{padding-top:12px}
+}
+@media(max-width:480px){
+  .brand-sub{display:none}
+  .hdr-bar{flex-wrap:wrap}
+  .sync-bar{margin-inline-start:0}
+}
+</style>
 </head>
 <body>
 
@@ -431,6 +460,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   </div>
   <div class="hdr" id="hdrEl">
     <div class="hdr-top">
+      <button class="nav-toggle" id="navToggle" onclick="toggleNav()" aria-label="القائمة" aria-controls="appSidenav" aria-expanded="false" title="القائمة">☰</button>
       <h1 class="brand"><span class="brand-logo">🏥</span><span class="brand-text"><span class="brand-mark">Eva</span><span class="brand-sub">تقييم الممارسة اليومية</span></span></h1>
       <div class="hdr-meta">
         <div class="hdr-clock">
@@ -450,13 +480,6 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
         <button class="grp-btn active-morning" id="grpBtnMorning" onclick="switchGroup('morning')">🌅 صباحي</button>
         <button class="grp-btn" id="grpBtnEvening" onclick="switchGroup('evening')">🌙 مسائي</button>
       </div>
-      <div class="hdr-fields">
-        <label class="hl">المستشفى</label>
-        <input class="hinput" id="hName" placeholder="اسم المستشفى..." onchange="saveSettings()">
-        <input class="hinput" id="hNo" placeholder="رقم" style="width:64px" onchange="saveSettings()">
-        <label class="hl">المشرف</label>
-        <input class="hinput" id="supName" placeholder="اسم المشرف..." onchange="saveSettings()">
-      </div>
       <div class="sync-bar" id="syncBar">
         <div class="sync-dot" id="syncDot"></div>
         <span id="syncMsg">متصل — البيانات محفوظة على السحابة</span>
@@ -465,8 +488,13 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   </div>
 
   <div class="app-body" id="appBody">
+    <div class="nav-backdrop" id="navBackdrop" onclick="closeNav()" hidden></div>
     <div class="main">
-      <aside class="sidenav">
+      <aside class="sidenav" id="appSidenav" role="navigation" aria-label="التنقل الرئيسي">
+        <div class="drawer-head">
+          <span>القوائم والتنقّل</span>
+          <button class="drawer-close" onclick="closeNav()" aria-label="إغلاق القائمة" title="إغلاق">✕</button>
+        </div>
         <div class="nav-group">
           <div class="nav-group-label">اليوم</div>
           <button class="tab-btn active" id="tbhome" onclick="showTab('home')">🏠 اليوم</button>
@@ -497,6 +525,17 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
         <div class="nav-group" id="adminNavGroup" style="display:none">
           <div class="nav-group-label">الإدارة</div>
           <button class="tab-btn" id="tbadmin" onclick="showTab('admin')">🛡️ لوحة المدير</button>
+        </div>
+        <!-- per-session fields — tucked into the drawer so tabs stay full-screen -->
+        <div class="nav-group drawer-session">
+          <div class="nav-group-label">بيانات الجلسة</div>
+          <label class="hl" for="hName">المستشفى</label>
+          <div class="drawer-field-row">
+            <input class="hinput" id="hName" placeholder="اسم المستشفى..." onchange="saveSettings()">
+            <input class="hinput" id="hNo" placeholder="رقم" onchange="saveSettings()">
+          </div>
+          <label class="hl" for="supName">المشرف</label>
+          <input class="hinput" id="supName" placeholder="اسم المشرف..." onchange="saveSettings()">
         </div>
       </aside>
       <div class="content-area">
@@ -2062,7 +2101,27 @@ var FIELDS=[
 // ═══════════════════════════════════════════
 // TABS
 // ═══════════════════════════════════════════
+/* ── Off-canvas nav drawer: full-screen content on every device, with a
+   ☰ button that reveals navigation. Accessible: aria-expanded, ESC to
+   close, backdrop click, focus returns to the toggle. ── */
+function openNav(){
+  document.body.classList.add('nav-open');
+  var t=document.getElementById('navToggle'); if(t) t.setAttribute('aria-expanded','true');
+  var bd=document.getElementById('navBackdrop'); if(bd) bd.hidden=false;
+  var first=document.querySelector('#appSidenav .tab-btn'); if(first){ try{ first.focus(); }catch(e){} }
+}
+function closeNav(){
+  if(!document.body.classList.contains('nav-open')) return;
+  document.body.classList.remove('nav-open');
+  var t=document.getElementById('navToggle');
+  if(t){ t.setAttribute('aria-expanded','false'); try{ t.focus(); }catch(e){} }
+  var bd=document.getElementById('navBackdrop'); if(bd) bd.hidden=true;
+}
+function toggleNav(){ document.body.classList.contains('nav-open') ? closeNav() : openNav(); }
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeNav(); });
+
 function showTab(n){
+  closeNav(); // opening any tab returns to full-screen content
   document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
   var panels={home:'phome',att:'pa',paper:'pp',roster:'pr',hist:'ph',db:'pdb',audit:'pal',prog:'ppg',rot:'prot',stat:'pstat',course:'pcourse',admin:'padmin'};
