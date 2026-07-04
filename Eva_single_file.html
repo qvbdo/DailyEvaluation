@@ -5763,6 +5763,17 @@ function openStudentProfile(id){
         h+='</div>';
         if(!hasScores) h+='<div style="font-size:12px;color:var(--muted);margin-top:6px">لا يوجد تفصيل درجات لهذا اليوم.</div>';
         if(raw.notes && String(raw.notes).trim()){ h+='<div style="font-size:12.5px;margin-top:8px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--ink-2)">📝 '+esc(raw.notes)+'</div>'; }
+        // P3: transparent manual override for this day (grade/attendance). Stored
+        // in profile.overrides[evalId]; the evaluation record is never modified.
+        var oo=ov[t.id]||{};
+        h+='<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">';
+        h+='<div style="font-size:11px;color:#8a6d1a;font-weight:700;margin-bottom:5px">✎ تصحيح يدوي (اختياري — يُعرَض كقيمة «معدّلة» ولا يغيّر السجل الأصلي)</div>';
+        h+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+        h+='<label style="font-size:11px">الدرجة: <input type="number" step="0.25" min="0" max="15" id="ov_total_'+t.id+'" value="'+(typeof oo.total==='number'?oo.total:'')+'" placeholder="—" style="width:72px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"></label>';
+        h+='<label style="font-size:11px">الحضور: <select id="ov_att_'+t.id+'" style="border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px"><option value="">— كما هو —</option><option value="present"'+(oo.attendance==='present'?' selected':'')+'>حاضر</option><option value="absent"'+(oo.attendance==='absent'?' selected':'')+'>غائب</option></select></label>';
+        h+='<button class="btn bp" style="font-size:11px;padding:5px 10px" onclick="saveDayOverride(\''+esc(id)+'\',\''+esc(t.id)+'\')">حفظ التصحيح</button>';
+        if(oo.total!=null||oo.attendance){ h+='<button class="btn bo" style="font-size:11px;padding:5px 10px" onclick="clearDayOverride(\''+esc(id)+'\',\''+esc(t.id)+'\')">إلغاء التصحيح</button>'; }
+        h+='</div></div>';
         h+='</div></details>';
       });
       h+='</div></div>';
@@ -5826,6 +5837,37 @@ function saveStudentProfileEdit(id){
   }, { action:'profile:edit:'+id });
   toast('✓ تم حفظ ملف الطالب');
   openStudentProfile(id);
+}
+
+// ── P3: manual override of a computed day value (overlay; record untouched) ──
+function saveDayOverride(sid, evalId){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
+  if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
+  var tEl=document.getElementById('ov_total_'+evalId), aEl=document.getElementById('ov_att_'+evalId);
+  var tv=tEl?String(tEl.value||'').trim():'', av=aEl?aEl.value:'';
+  var o={};
+  if(tv!==''){ var n=parseFloat(tv); if(!isNaN(n)) o.total=Math.max(0,Math.min(15,Math.round(n*100)/100)); }
+  if(av==='present'||av==='absent') o.attendance=av;
+  var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
+  Store.update('students.'+sid, function(st){
+    st.profile=st.profile||{}; st.profile.overrides=st.profile.overrides||{};
+    if(Object.keys(o).length){ st.profile.overrides[evalId]=o; } else { delete st.profile.overrides[evalId]; }
+    st.profile.updatedAt=Date.now(); st.profile.updatedBy=who;
+    return st;
+  }, { action:'profile:override:'+evalId });
+  toast(Object.keys(o).length?'✓ حُفِظ التصحيح اليدوي':'أُزيل التصحيح');
+  openStudentProfile(sid);
+}
+function clearDayOverride(sid, evalId){
+  if(!(window.Roles && Roles.isEvaluator())){ toast('غير مصرح بالتعديل'); return; }
+  if(!(window.Store && window.eva && eva.students[sid])){ toast('تعذّر الحفظ'); return; }
+  var who=(window.currentUser?(currentUser.displayName||currentUser.email||''):'')||'محلي';
+  Store.update('students.'+sid, function(st){
+    if(st.profile && st.profile.overrides){ delete st.profile.overrides[evalId]; st.profile.updatedAt=Date.now(); st.profile.updatedBy=who; }
+    return st;
+  }, { action:'profile:override:clear:'+evalId });
+  toast('أُزيل التصحيح');
+  openStudentProfile(sid);
 }
 
 // live refresh: keep the roster current when data changes elsewhere; never
