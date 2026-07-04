@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Eva — تقييم الممارسة اليومية</title>
 <!-- Velorah design system fonts: Cairo (Arabic) + Instrument Serif (cinematic display) + Inter (Latin UI) + JetBrains Mono (numeric data) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -93,7 +93,6 @@
     }
   };
 })();
-
 </script>
 <script>
 /* ── Data core: the ONE canonical store (schema v2) ──────────────────────
@@ -409,7 +408,6 @@
   /* self-boot: consumers gate on Store.ready(cb) */
   window.Store.init();
 })();
-
 </script>
 <script>
 /* ── Selectors: the ONLY read path for views, exports and email ──────────
@@ -587,7 +585,6 @@
 
   window.Selectors = Selectors;
 })();
-
 </script>
 <script>
 /* ── v1 → v2 migration: lift the legacy name-keyed stores into `eva` ─────
@@ -813,7 +810,6 @@
     }
   };
 })();
-
 </script>
 <script>
 /* ── Strangler bridge: classic history writes → canonical v2 Store ───────
@@ -957,7 +953,6 @@
     });
   };
 })();
-
 </script>
 <script>
 /* ── Flag engine: derived "needs follow-up" signals ─────────────────────
@@ -1091,7 +1086,6 @@
   }
   if (window.bus) wire(); else document.addEventListener('DOMContentLoaded', wire);
 })();
-
 </script>
 <script>
 /* ── Roles + student self-identification (6.3) ──────────────────────────
@@ -1188,7 +1182,6 @@
     bus.on('students:changed', function () { if (_role === 'student' && !_studentId) { _studentId = resolveStudentId(); if (_studentId && window.bus) bus.emit('role:resolved', { role: _role, studentId: _studentId }); } });
   }
 })();
-
 </script>
 <script>
 /* ── Sync: the ONLY Firebase writer for the v2 store ─────────────────────
@@ -1321,7 +1314,6 @@
   if (window.Store && Store.isReady && Store.isReady()) Sync.start();
   else if (window.bus) window.bus.on('store:ready', function () { Sync.start(); });
 })();
-
 </script>
 <!-- Firebase loads dynamically in JS only when online mode is chosen -->
 <style>
@@ -1415,15 +1407,69 @@ h1,h2,h3{text-wrap:balance;letter-spacing:-.01em}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 
-/* responsive: sidebar becomes a horizontal scroll strip on narrow screens */
-@media(max-width:820px){
-  .main{flex-direction:column;gap:12px}
-  .sidenav{position:static;flex:none;width:100%;display:flex;gap:6px;overflow-x:auto;padding:8px}
-  .nav-group{display:flex;gap:6px;margin:0;align-items:center}
-  .nav-group + .nav-group{border-top:none;border-right:1px solid var(--border);padding-top:0;padding-right:6px}
-  .nav-group-label{display:none}
-  .tab-btn{width:auto;white-space:nowrap;flex:0 0 auto;margin:0}
-}
+/* ═══════════════════════════════════════════════════════════════════
+   ADAPTIVE SHELL — off-canvas nav drawer + full-screen content on EVERY
+   device (laptop, iPad, phone). The ☰ button in the header reveals the
+   navigation; picking a tab closes it. 2026 best-practice: dynamic-viewport
+   sizing, iOS/iPad safe-area insets, ≥44px touch targets, a11y drawer.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Content spans the full width on every breakpoint (the sidebar is now a
+   drawer taken out of flow). Honour the device safe-area on the sides. */
+.main{display:block;
+  padding-inline-start:max(14px,env(safe-area-inset-left));
+  padding-inline-end:max(14px,env(safe-area-inset-right))}
+.content-area{width:100%;min-width:0}
+
+/* header sits below the notch; the menu toggle is a 44px WCAG touch target */
+.hdr{padding-top:env(safe-area-inset-top)}
+.nav-toggle{display:inline-flex;align-items:center;justify-content:center;
+  width:44px;height:44px;flex:0 0 auto;border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text);border-radius:12px;
+  font-size:20px;line-height:1;cursor:pointer;
+  transition:background .18s,box-shadow .2s,transform .15s var(--e-out)}
+.nav-toggle:hover{background:#fff;box-shadow:var(--sh-1)}
+.nav-toggle:active{transform:scale(.94)}
+.nav-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(31,167,146,.4)}
+
+/* THE DRAWER — pinned to the inline-start (right, in this RTL app), slides
+   off-canvas by default, glides in when body.nav-open. */
+.sidenav{
+  position:fixed;top:0;bottom:0;inset-inline-start:0;
+  width:min(286px,86vw);height:100dvh;
+  flex:none;margin:0;border-radius:0;
+  padding:12px;
+  padding-top:calc(env(safe-area-inset-top) + 12px);
+  padding-bottom:calc(env(safe-area-inset-bottom) + 16px);
+  background:var(--surface);border:none;border-inline-end:1px solid var(--border);
+  box-shadow:none;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;z-index:60;
+  transform:translateX(100%);            /* hidden off the right edge (RTL) */
+  transition:transform .32s var(--e-out);
+  visibility:hidden}
+body.nav-open .sidenav{transform:translateX(0);visibility:visible;box-shadow:var(--sh-3)}
+
+/* drawer title bar + close button */
+.drawer-head{display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:2px 4px 12px;margin-bottom:6px;border-bottom:1px solid var(--line-soft)}
+.drawer-head span{font-size:12.5px;font-weight:800;color:var(--primary)}
+.drawer-close{width:36px;height:36px;flex:0 0 auto;border:none;border-radius:10px;
+  background:var(--surface-2);color:var(--ink-2);font-size:16px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;transition:background .18s}
+.drawer-close:hover{background:#fff;box-shadow:var(--sh-1)}
+
+/* comfortable touch targets for the nav items */
+.sidenav .tab-btn{min-height:44px;padding:11px 12px;font-size:14px}
+
+/* dimmed backdrop behind the open drawer */
+.nav-backdrop{position:fixed;inset:0;background:rgba(0,12,20,.5);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  z-index:55;opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .3s var(--e-out),visibility .3s}
+body.nav-open .nav-backdrop{opacity:1;visibility:visible;pointer-events:auto}
+
+/* lock background scroll while the drawer is open */
+body.nav-open{overflow:hidden}
 
 /* BUTTONS */
 .btn{cursor:pointer;border:none;border-radius:var(--r-sm);padding:9px 14px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
@@ -1749,7 +1795,6 @@ h1,h2,h3{text-wrap:balance;letter-spacing:-.01em}
   #printArea, #printArea * { visibility: visible; }
   #printArea { position: fixed; left: 0; top: 0; width: 100%; }
 }
-
 </style>
 <script>
 // ── SERVICE WORKER REGISTRATION (Option A) ──
@@ -2026,6 +2071,35 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 /* ════════ HEADINGS ════════ */
 .content-area h2,.content-area h3{font-family:"Cairo",sans-serif}
 </style>
+
+<!-- Adaptive shell overrides — re-assert the drawer geometry over the skin's
+     sidebar look (the skin block above sets top/padding/radius on .sidenav).
+     Core drawer mechanics (position/transform/width) live in styles.css. -->
+<style id="responsive-shell">
+.sidenav{flex:none;top:0;border:none;border-inline-end:1px solid var(--border);
+  border-radius:0;box-shadow:none;padding:12px;
+  padding-top:calc(env(safe-area-inset-top) + 12px);
+  padding-bottom:calc(env(safe-area-inset-bottom) + 16px)}
+body.nav-open .sidenav{box-shadow:var(--sh-3)}
+/* per-session fields tucked into the drawer */
+.drawer-session{margin-top:12px}
+.drawer-session .hl{display:block;padding:6px 4px 3px;font-size:11px}
+.drawer-session .hinput{width:100%;font-size:13px;padding:9px 11px}
+.drawer-field-row{display:flex;gap:6px}
+.drawer-field-row #hName{flex:1 1 auto;min-width:0}
+.drawer-field-row #hNo{flex:0 0 68px;text-align:center}
+/* slim the header on phones so a tab truly fills the screen */
+@media(max-width:768px){
+  .hdr-top{padding:9px 12px}
+  .hdr-bar{padding:7px 12px;gap:8px}
+  .main{padding-top:12px}
+}
+@media(max-width:480px){
+  .brand-sub{display:none}
+  .hdr-bar{flex-wrap:wrap}
+  .sync-bar{margin-inline-start:0}
+}
+</style>
 </head>
 <body>
 
@@ -2103,6 +2177,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   </div>
   <div class="hdr" id="hdrEl">
     <div class="hdr-top">
+      <button class="nav-toggle" id="navToggle" onclick="toggleNav()" aria-label="القائمة" aria-controls="appSidenav" aria-expanded="false" title="القائمة">☰</button>
       <h1 class="brand"><span class="brand-logo">🏥</span><span class="brand-text"><span class="brand-mark">Eva</span><span class="brand-sub">تقييم الممارسة اليومية</span></span></h1>
       <div class="hdr-meta">
         <div class="hdr-clock">
@@ -2122,13 +2197,6 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
         <button class="grp-btn active-morning" id="grpBtnMorning" onclick="switchGroup('morning')">🌅 صباحي</button>
         <button class="grp-btn" id="grpBtnEvening" onclick="switchGroup('evening')">🌙 مسائي</button>
       </div>
-      <div class="hdr-fields">
-        <label class="hl">المستشفى</label>
-        <input class="hinput" id="hName" placeholder="اسم المستشفى..." onchange="saveSettings()">
-        <input class="hinput" id="hNo" placeholder="رقم" style="width:64px" onchange="saveSettings()">
-        <label class="hl">المشرف</label>
-        <input class="hinput" id="supName" placeholder="اسم المشرف..." onchange="saveSettings()">
-      </div>
       <div class="sync-bar" id="syncBar">
         <div class="sync-dot" id="syncDot"></div>
         <span id="syncMsg">متصل — البيانات محفوظة على السحابة</span>
@@ -2137,8 +2205,13 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   </div>
 
   <div class="app-body" id="appBody">
+    <div class="nav-backdrop" id="navBackdrop" onclick="closeNav()" hidden></div>
     <div class="main">
-      <aside class="sidenav">
+      <aside class="sidenav" id="appSidenav" role="navigation" aria-label="التنقل الرئيسي">
+        <div class="drawer-head">
+          <span>القوائم والتنقّل</span>
+          <button class="drawer-close" onclick="closeNav()" aria-label="إغلاق القائمة" title="إغلاق">✕</button>
+        </div>
         <div class="nav-group">
           <div class="nav-group-label">اليوم</div>
           <button class="tab-btn active" id="tbhome" onclick="showTab('home')">🏠 اليوم</button>
@@ -2169,6 +2242,17 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
         <div class="nav-group" id="adminNavGroup" style="display:none">
           <div class="nav-group-label">الإدارة</div>
           <button class="tab-btn" id="tbadmin" onclick="showTab('admin')">🛡️ لوحة المدير</button>
+        </div>
+        <!-- per-session fields — tucked into the drawer so tabs stay full-screen -->
+        <div class="nav-group drawer-session">
+          <div class="nav-group-label">بيانات الجلسة</div>
+          <label class="hl" for="hName">المستشفى</label>
+          <div class="drawer-field-row">
+            <input class="hinput" id="hName" placeholder="اسم المستشفى..." onchange="saveSettings()">
+            <input class="hinput" id="hNo" placeholder="رقم" onchange="saveSettings()">
+          </div>
+          <label class="hl" for="supName">المشرف</label>
+          <input class="hinput" id="supName" placeholder="اسم المشرف..." onchange="saveSettings()">
         </div>
       </aside>
       <div class="content-area">
@@ -3734,7 +3818,27 @@ var FIELDS=[
 // ═══════════════════════════════════════════
 // TABS
 // ═══════════════════════════════════════════
+/* ── Off-canvas nav drawer: full-screen content on every device, with a
+   ☰ button that reveals navigation. Accessible: aria-expanded, ESC to
+   close, backdrop click, focus returns to the toggle. ── */
+function openNav(){
+  document.body.classList.add('nav-open');
+  var t=document.getElementById('navToggle'); if(t) t.setAttribute('aria-expanded','true');
+  var bd=document.getElementById('navBackdrop'); if(bd) bd.hidden=false;
+  var first=document.querySelector('#appSidenav .tab-btn'); if(first){ try{ first.focus(); }catch(e){} }
+}
+function closeNav(){
+  if(!document.body.classList.contains('nav-open')) return;
+  document.body.classList.remove('nav-open');
+  var t=document.getElementById('navToggle');
+  if(t){ t.setAttribute('aria-expanded','false'); try{ t.focus(); }catch(e){} }
+  var bd=document.getElementById('navBackdrop'); if(bd) bd.hidden=true;
+}
+function toggleNav(){ document.body.classList.contains('nav-open') ? closeNav() : openNav(); }
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeNav(); });
+
 function showTab(n){
+  closeNav(); // opening any tab returns to full-screen content
   document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
   document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
   var panels={home:'phome',att:'pa',paper:'pp',roster:'pr',hist:'ph',db:'pdb',audit:'pal',prog:'ppg',rot:'prot',stat:'pstat',course:'pcourse',admin:'padmin'};
