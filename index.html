@@ -433,14 +433,14 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
 /* headline sits in the upper third — roughly midway between the header sign-in
    row and the head of the walking figure in the video (not vertically centered). */
 .wf-center{position:relative;z-index:20;text-align:center;padding:24px;max-width:1100px;width:100%;
-  margin-top:clamp(96px,15vh,220px);
+  margin-top:clamp(56px,9vh,150px);
   animation:wfRise 1s cubic-bezier(.22,1,.36,1) both}
 .wf-hero{margin:0;font-family:Helvetica,sans-serif;font-weight:400;
   font-size:clamp(34px,5.4vw,72px);line-height:1.08;letter-spacing:-.02em;color:#fff}
 /* nowrap keeps it to exactly two lines on desktop/tablet (one span per line);
    the mobile media query below re-enables wrapping so it never overflows. */
 .wf-hero span{display:block;white-space:nowrap}
-.wf-hero-dim{color:rgba(255,255,255,.58)}
+.wf-hero-dim{color:#fff}
 /* sign-in options — in the header row, between the wordmark and the CPA pill */
 .wf-authbar{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
 .wf-btnrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
@@ -476,7 +476,7 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
   .wf-pill{display:none}
   .wf-hero{font-size:clamp(30px,8.2vw,46px)}
   /* narrow screens: allow the second line to wrap and pull the block up a touch */
-  .wf-center{margin-top:clamp(80px,14vh,180px)}
+  .wf-center{margin-top:clamp(48px,9vh,120px)}
   .wf-hero span{white-space:normal}
 }
 </style>
