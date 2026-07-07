@@ -23,6 +23,14 @@ if (!html.includes(cssTag)) throw new Error('missing styles.css link');
 const css = readFileSync(p('styles.css'), 'utf8').replace(/\s+$/, '');
 html = html.replace(cssTag, `<style>\n${css}\n</style>`);
 
+// Inline the login hero background so the single-file bundle is self-contained
+// (the hosted index.html keeps the external /hero-bg.jpg reference for caching).
+const heroRef = 'src="/hero-bg.jpg"';
+if (html.includes(heroRef)) {
+  const b64 = readFileSync(p('hero-bg.jpg')).toString('base64');
+  html = html.replace(heroRef, `src="data:image/jpeg;base64,${b64}"`);
+}
+
 // sanity: no local references should remain inlined-away
 for (const leftover of ['src="/src/', 'href="/styles.css"']) {
   if (html.includes(leftover)) throw new Error(`leftover local ref: ${leftover}`);

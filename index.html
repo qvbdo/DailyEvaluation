@@ -4,10 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Eva — تقييم الممارسة اليومية</title>
-<!-- Velorah design system fonts: Cairo (Arabic) + Instrument Serif (cinematic display) + Inter (Latin UI) + JetBrains Mono (numeric data) -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Single UI typeface: Helvetica (falls back to Arial for Arabic glyphs, then Tahoma/Segoe UI).
+     No web-font download — this removes the render-blocking Google Fonts request entirely. -->
+
+<!-- Warm up Firebase + Google-auth hosts during page load so the SDK fetch and
+     the "Sign in with Google" popup don't pay a fresh DNS/TLS handshake on click. -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://apis.google.com" crossorigin>
+<link rel="preconnect" href="https://accounts.google.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://surveys89.firebaseapp.com" crossorigin>
+<link rel="preconnect" href="https://surveys89-default-rtdb.firebaseio.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.googleapis.com">
 
 <script>
   // Handled-error reporter: logs locally with context. If external monitoring is
@@ -29,9 +38,11 @@
 <!-- Small, always-needed libs stay eager: toasts, dialogs, and Fuse (used by
      the boot migration). fuse is tiny; notyf + sweetalert2 drive UI feedback. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.css" integrity="sha384-snpJ3knpH6avB6cP1vPkNdmRzCYaCpom/3TNOyvo189BiogXYXQfXkyYpZ2/xADs" crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.js" integrity="sha384-uuNfwJfjOG2ukYi4eAB11/t3lP4Zjf75a3UhgkLzEpiX8JpJfacpG7Ye+0tiVMxT" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js" integrity="sha384-nLoOnA/BDh8A/jxqtckg4DumuCGOBYUnNJLZdQz/zfYNp3wcjGSoWTAzgko06G/2" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0" integrity="sha384-PCSoOZTpbkikBEtd/+uV3WNdc676i9KUf01KOA8CnJotvlx8rRrETbDuwdjqTYvt" crossorigin="anonymous"></script>
+<!-- defer: these load in parallel without blocking HTML parse/first paint. toast()
+     guards for Notyf, and Swal/Fuse are only touched in later handlers (post-DOMContentLoaded). -->
+<script defer src="https://cdn.jsdelivr.net/npm/notyf@3.10.0/notyf.min.js" integrity="sha384-uuNfwJfjOG2ukYi4eAB11/t3lP4Zjf75a3UhgkLzEpiX8JpJfacpG7Ye+0tiVMxT" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11.26.25/dist/sweetalert2.all.min.js" integrity="sha384-nLoOnA/BDh8A/jxqtckg4DumuCGOBYUnNJLZdQz/zfYNp3wcjGSoWTAzgko06G/2" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0" integrity="sha384-PCSoOZTpbkikBEtd/+uV3WNdc676i9KUf01KOA8CnJotvlx8rRrETbDuwdjqTYvt" crossorigin="anonymous"></script>
 <!-- PHASE 6: heavy libs (chart.js ~200KB, xlsx ~900KB, html2pdf ~300KB,
      gridjs, driver.js) load on first use only — not at startup. -->
 <script>
@@ -117,7 +128,7 @@ window.addEventListener('load', function() {
 /* ===== Sections Wheel hub (launcher) — namespaced swh-* ; uses the app's own tokens ===== */
 .swh-overlay{position:fixed;inset:0;z-index:99990;display:none;flex-direction:column;overflow-y:auto;
   background:radial-gradient(130% 80% at 50% -10%, #ffffff 0%, var(--bg) 60%, #e6eeec 100%);
-  direction:rtl;font-family:Tahoma,"Segoe UI",Arial,sans-serif}
+  direction:rtl;font-family:Helvetica,Arial,"Segoe UI",Tahoma,sans-serif}
 .swh-overlay.swh-show{display:flex;animation:swhIn .35s ease}
 @keyframes swhIn{from{opacity:0}to{opacity:1}}
 .swh-top{display:flex;align-items:center;gap:11px;padding:calc(16px + env(safe-area-inset-top,0px)) 18px 4px}
@@ -173,9 +184,10 @@ window.addEventListener('load', function() {
   --teal-300:#0f8a78;--teal-500:#1fa792;--teal-600:#0f6e62;--teal-700:#0c5b52;
   --indigo-300:#5457e6;--green-400:#15a35a;--rose-500:#e11d48;--amber-400:#bf841d;
   --navy-900:#001c2a;--navy-800:#002a3d;--navy-700:#003047;
-  --font-display:"Instrument Serif","Cairo",Georgia,serif;
-  --font-body:"Inter","Cairo",system-ui,sans-serif;
-  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  /* one typeface everywhere — Helvetica, with Arial/Tahoma/Segoe UI as Arabic-capable fallbacks */
+  --font-display:Helvetica,Arial,"Segoe UI",Tahoma,sans-serif;
+  --font-body:Helvetica,Arial,"Segoe UI",Tahoma,sans-serif;
+  --font-mono:Helvetica,Arial,"Segoe UI",Tahoma,sans-serif;
   --r-md:14px;--r-lg:22px;--r-pill:999px;
   --e-out:cubic-bezier(.22,1,.36,1);
   --ring:0 0 0 3px rgba(31,167,146,.40);
@@ -202,7 +214,7 @@ window.addEventListener('load', function() {
 .login-topbar{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;
   justify-content:space-between;gap:12px;padding:22px 34px;max-width:1280px;margin:0 auto}
 .login-wordmark{font-family:var(--font-display);font-size:46px;line-height:1;color:#fff;letter-spacing:-.02em}
-.login-affil{font-family:"Cairo",sans-serif;font-size:13px;color:rgba(255,255,255,.72)}
+.login-affil{font-family:Helvetica,sans-serif;font-size:13px;color:rgba(255,255,255,.72)}
 .login-stage{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;
   align-items:center;justify-content:center;text-align:center;padding:0 24px;gap:40px}
 .login-hero{font-family:var(--font-display);font-weight:400;font-size:clamp(40px,8vw,92px);
@@ -252,8 +264,8 @@ window.addEventListener('load', function() {
    Frosted glass surfaces, luminous hairline edges, teal accents.
    ════════════════════════════════════════════════════════════════════ */
 :root{--edge-top:inset 0 1px 0 rgba(255,255,255,.7)}
-body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arabic glyphs */
-[dir=rtl] body,body{font-family:"Cairo","Inter",Tahoma,sans-serif}
+body{font-family:var(--font-body)}            /* Helvetica everywhere (Arial/Tahoma cover Arabic) */
+[dir=rtl] body,body{font-family:Helvetica,Helvetica,Tahoma,sans-serif}
 .app-body{background:
   radial-gradient(900px 520px at 88% -8%,rgba(31,167,146,.10),transparent 60%),
   radial-gradient(760px 600px at -6% 108%,rgba(84,87,230,.07),transparent 55%)}
@@ -266,7 +278,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 .hdr-top h1.brand{display:flex;align-items:center;gap:11px;font-weight:400}
 .brand-text{display:flex;flex-direction:column;gap:1px}
 .brand-mark{font-family:var(--font-display);font-size:26px;line-height:1;color:var(--text);letter-spacing:-.02em}
-.brand-sub{font-family:"Cairo",sans-serif;font-size:11px;font-weight:600;color:var(--muted)}
+.brand-sub{font-family:Helvetica,sans-serif;font-size:11px;font-weight:600;color:var(--muted)}
 .brand-logo{width:34px;height:34px;border-radius:9px;object-fit:cover;
   background:linear-gradient(135deg,var(--pl),var(--indigo));display:inline-flex;
   align-items:center;justify-content:center;font-size:18px;box-shadow:var(--sh-1)}
@@ -289,7 +301,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   border-radius:999px;padding:5px 13px;border-top:none;min-height:0;font-size:11.5px}
 .sync-dot{box-shadow:0 0 8px var(--success)}
 /* offline banner — softened, on-brand amber */
-.offline-banner{background:linear-gradient(135deg,#c4861b,#b45309);font-family:"Cairo",sans-serif;
+.offline-banner{background:linear-gradient(135deg,#c4861b,#b45309);font-family:Helvetica,sans-serif;
   font-size:12.5px;padding:7px 18px;box-shadow:var(--sh-1)}
 
 /* ════════ SIDEBAR — Velorah grouped glass nav ════════ */
@@ -297,7 +309,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
   border-radius:var(--r);padding:10px;box-shadow:var(--sh-2),var(--edge-top);top:96px}
 .nav-group-label{font-size:10px;font-weight:800;color:var(--text-faint,#94a7a1);
   letter-spacing:0;padding:6px 10px 4px}
-.tab-btn{border-radius:12px;font-family:"Cairo",sans-serif}
+.tab-btn{border-radius:12px;font-family:Helvetica,sans-serif}
 .tab-btn.active{background:rgba(31,167,146,.16);color:var(--teal-600);font-weight:700;
   box-shadow:inset 0 0 0 1px rgba(31,167,146,.30)}
 .tab-btn:not(.active):hover{background:rgba(255,255,255,.7);transform:translateX(-3px)}
@@ -311,7 +323,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 .sc + .sc::before{background:var(--border)}
 
 /* ════════ BUTTONS — cohesive Velorah action set ════════ */
-.btn{border-radius:var(--r-sm);font-family:"Cairo",sans-serif;letter-spacing:-.005em;
+.btn{border-radius:var(--r-sm);font-family:Helvetica,sans-serif;letter-spacing:-.005em;
   transition:transform .18s var(--e-out),filter .2s,box-shadow .25s,background .2s}
 .btn:hover{transform:translateY(-1px)}
 .bp,.bt{background:linear-gradient(135deg,var(--pl),var(--primary));color:#fff;box-shadow:var(--sh-1),var(--edge-top)}
@@ -327,9 +339,9 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 
 /* ════════ STUDENT LIST ════════ */
 .slist{border-radius:0 0 var(--r) var(--r)}
-.lhdr{border-radius:var(--r) var(--r) 0 0;font-family:"Cairo",sans-serif}
+.lhdr{border-radius:var(--r) var(--r) 0 0;font-family:Helvetica,sans-serif}
 .srow:hover{background:rgba(31,167,146,.05)}
-.sname{font-family:"Cairo",sans-serif}
+.sname{font-family:Helvetica,sans-serif}
 .sbadge span{font-family:var(--font-mono)}
 .snum{font-family:var(--font-mono)}
 
@@ -337,7 +349,7 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 .overlay{background:rgba(0,12,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .modal{border-radius:var(--r-lg);box-shadow:var(--sh-3)}
 .mhdr{background:linear-gradient(135deg,var(--teal-600),var(--primary-d));border-radius:var(--r-lg) var(--r-lg) 0 0}
-.mhdr h2{font-family:"Cairo",sans-serif;font-weight:800;font-size:16px}
+.mhdr h2{font-family:Helvetica,sans-serif;font-weight:800;font-size:16px}
 .esec{background:var(--surface-2);border-radius:var(--r-md)}
 .estit{color:var(--teal-300,var(--primary))}
 .tbar{background:linear-gradient(135deg,var(--teal-600),var(--primary-d));border-radius:var(--r-md)}
@@ -346,13 +358,13 @@ body{font-family:var(--font-body)}            /* Inter for Latin, Cairo for Arab
 .mftr{border-radius:0 0 var(--r-lg) var(--r-lg)}
 
 /* ════════ PAPER / OTHER TABS — consistent glass cards ════════ */
-.phdr h2{font-family:"Cairo",sans-serif;color:var(--text)}
+.phdr h2{font-family:Helvetica,sans-serif;color:var(--text)}
 .pst{border-radius:10px}
 .plist{border-radius:0 0 var(--r) var(--r)}
 .plhdr{border-radius:var(--r) var(--r) 0 0}
 
 /* ════════ HEADINGS ════════ */
-.content-area h2,.content-area h3{font-family:"Cairo",sans-serif}
+.content-area h2,.content-area h3{font-family:Helvetica,sans-serif}
 </style>
 
 <!-- Adaptive shell overrides — re-assert the drawer geometry over the skin's
@@ -405,11 +417,10 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
      video, glass accents, wired to the existing signIn()/enterOfflineMode(). ══ -->
 <style id="wf-login">
 #loginScreen{position:fixed;inset:0;z-index:200;background:#000;color:#fff;overflow:hidden;
-  direction:ltr;font-family:"Inter",system-ui,sans-serif;
-  flex-direction:column;align-items:center;justify-content:center}
-.wf-bg{position:fixed;inset:0;z-index:0;overflow:hidden;transform:scale(1.08);transform-origin:center;background:#000}
-.wf-bg video{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 1.1s ease}
-.wf-bg video.wf-ready{opacity:1}
+  direction:ltr;font-family:Helvetica,system-ui,sans-serif;
+  flex-direction:column;align-items:center;justify-content:flex-start}
+.wf-bg{position:fixed;inset:0;z-index:0;overflow:hidden;background:#000}
+.wf-bg-img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .wf-scrim{position:fixed;inset:0;z-index:1;pointer-events:none;
   background:radial-gradient(1200px 820px at 50% 42%,rgba(0,0,0,.10),rgba(0,0,0,.5) 72%),
     linear-gradient(180deg,rgba(0,0,0,.62),rgba(0,0,0,.22) 32%,rgba(0,0,0,.62))}
@@ -419,11 +430,16 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
 .wf-brand{font-size:15px;font-weight:600;letter-spacing:-.01em;color:#fff;line-height:1.25;white-space:nowrap}
 .wf-pill{border-radius:9999px;padding:8px 16px;font-size:10.5px;font-weight:500;letter-spacing:.14em;
   text-transform:uppercase;color:rgba(255,255,255,.9);white-space:nowrap}
-.wf-center{position:relative;z-index:20;text-align:center;padding:24px;max-width:920px;width:100%;
+/* headline sits in the upper third — roughly midway between the header sign-in
+   row and the head of the walking figure in the video (not vertically centered). */
+.wf-center{position:relative;z-index:20;text-align:center;padding:24px;max-width:1100px;width:100%;
+  margin-top:clamp(96px,15vh,220px);
   animation:wfRise 1s cubic-bezier(.22,1,.36,1) both}
-.wf-hero{margin:0;font-family:"Inter",sans-serif;font-weight:400;
+.wf-hero{margin:0;font-family:Helvetica,sans-serif;font-weight:400;
   font-size:clamp(34px,5.4vw,72px);line-height:1.08;letter-spacing:-.02em;color:#fff}
-.wf-hero span{display:block}
+/* nowrap keeps it to exactly two lines on desktop/tablet (one span per line);
+   the mobile media query below re-enables wrapping so it never overflows. */
+.wf-hero span{display:block;white-space:nowrap}
 .wf-hero-dim{color:rgba(255,255,255,.58)}
 /* sign-in options — in the header row, between the wordmark and the CPA pill */
 .wf-authbar{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -433,7 +449,7 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
   background:rgba(240,181,74,.14);border:1px solid rgba(240,181,74,.4);border-radius:9999px;padding:6px 12px}
 #loginScreen .google-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;
   cursor:pointer;border-radius:9999px;padding:8px 16px;font-size:12px;font-weight:500;
-  font-family:"Inter",sans-serif;letter-spacing:.01em;white-space:nowrap;min-width:0;width:auto;flex:0 0 auto;
+  font-family:Helvetica,sans-serif;letter-spacing:.01em;white-space:nowrap;min-width:0;width:auto;flex:0 0 auto;
   transition:transform .2s cubic-bezier(.22,1,.36,1),box-shadow .2s,filter .2s}
 #loginScreen .google-btn svg{width:15px;height:15px;flex:0 0 auto}
 #loginScreen .wf-btn-white{background:#fff;color:#1f1f1f;box-shadow:0 2px 12px rgba(0,0,0,.28)}
@@ -459,6 +475,9 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
   .wf-authbar{flex:1 0 100%}
   .wf-pill{display:none}
   .wf-hero{font-size:clamp(30px,8.2vw,46px)}
+  /* narrow screens: allow the second line to wrap and pull the block up a touch */
+  .wf-center{margin-top:clamp(80px,14vh,180px)}
+  .wf-hero span{white-space:normal}
 }
 </style>
 </head>
@@ -472,9 +491,9 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
 
 <!-- LOGIN — "Wanderful Hero": full-screen video + auto-detects connectivity -->
 <div id="loginScreen" dir="ltr" style="display:none">
-  <!-- fullscreen video background (parallax on desktop) with a black fallback -->
+  <!-- fullscreen static background: the video's final frame (no 9.6 MB video download) -->
   <div class="wf-bg">
-    <video id="wfVideo" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260510_060007_60275ce7-030c-4668-a160-8f364ec537d3.mp4" autoplay muted loop playsinline preload="auto"></video>
+    <img class="wf-bg-img" src="/hero-bg.jpg" alt="" aria-hidden="true" fetchpriority="high">
   </div>
   <div class="wf-scrim"></div>
 
@@ -525,34 +544,6 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
     </h1>
   </div>
 </div>
-<script>
-/* Wanderful Hero — vanilla parallax for the login video (converted from the
-   Claude Design DCLogic component; runs only while the login is visible). */
-(function(){
-  var v=document.getElementById('wfVideo'); if(!v) return;
-  v.addEventListener('loadedmetadata',function(){ try{ v.playbackRate=1.25; }catch(e){} });
-  v.addEventListener('canplay',function(){ v.classList.add('wf-ready'); });
-  v.addEventListener('error',function(){ var b=v.parentNode; if(b) b.style.display='none'; });
-  try{ var p=v.play(); if(p&&p.catch) p.catch(function(){}); }catch(e){}
-  if(window.matchMedia && !window.matchMedia('(pointer:fine)').matches) return; // no parallax on touch
-  var tX=0,tY=0,cX=0,cY=0,running=false;
-  function loginVisible(){ var ls=document.getElementById('loginScreen'); return ls && ls.style.display!=='none'; }
-  function tick(){
-    if(!loginVisible()){ running=false; return; } // suspend the rAF loop once the login is dismissed
-    cX+=(tX-cX)*0.06; cY+=(tY-cY)*0.06;
-    v.style.transform='translate3d('+cX.toFixed(2)+'px,'+cY.toFixed(2)+'px,0)';
-    requestAnimationFrame(tick);
-  }
-  function start(){ if(!running && loginVisible()){ running=true; requestAnimationFrame(tick); } }
-  window.addEventListener('mousemove',function(e){
-    var cx=window.innerWidth/2, cy=window.innerHeight/2;
-    tX=((e.clientX-cx)/cx)*18; tY=((e.clientY-cy)/cy)*18;
-    start();
-  },{passive:true});
-  start();
-})();
-</script>
-
 <!-- APP -->
 <div id="appRoot" style="display:none">
   <!-- OFFLINE BANNER -->
@@ -729,7 +720,7 @@ body.nav-open .sidenav{box-shadow:var(--sh-3)}
             </div>
           </div>
           <div style="padding:12px 16px">
-            <textarea id="dayNotes" rows="5" placeholder="اكتب أي ملاحظات تخص هذا اليوم (سلوك الطلاب، أحداث مهمة، تعليمات للمشرف القادم...)" style="width:100%;resize:vertical;min-height:90px;font-family:Tahoma,Arial,sans-serif;font-size:14px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);direction:rtl" oninput="onNotesInput()"></textarea>
+            <textarea id="dayNotes" rows="5" placeholder="اكتب أي ملاحظات تخص هذا اليوم (سلوك الطلاب، أحداث مهمة، تعليمات للمشرف القادم...)" style="width:100%;resize:vertical;min-height:90px;font-family:Helvetica,Tahoma,Arial,sans-serif;font-size:14px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);direction:rtl" oninput="onNotesInput()"></textarea>
           </div>
         </div>
         </div><!-- /paClassicWrap -->
@@ -4089,7 +4080,7 @@ function openStudentProfile(id){
   // FINAL GRADE — prominent
   h+='<div style="background:linear-gradient(135deg,#0f6e56,#0c5b52);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   h+='<span style="font-size:14px;font-weight:700;opacity:.92">🎓 الدرجة النهائية</span>';
-  h+='<span style="font-family:\'JetBrains Mono\',monospace;font-size:24px;font-weight:800">'+finalSum.toFixed(2)+' <span style="font-size:13px;opacity:.8">/ '+maxPossible.toFixed(0)+'</span></span>';
+  h+='<span style="font-family:Helvetica,Arial,sans-serif;font-size:24px;font-weight:800">'+finalSum.toFixed(2)+' <span style="font-size:13px;opacity:.8">/ '+maxPossible.toFixed(0)+'</span></span>';
   h+='</div>';
 
   if(flags.length){
@@ -4399,7 +4390,7 @@ function printStudentSummary(encName){
 
   var headCols = FIELDS.map(function(f,fi){ return '<th style="padding:6px 3px;font-size:9.5px;color:'+colors[fi]+'">'+f.s+'</th>'; }).join('');
 
-  var html = '<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
+  var html = '<div style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
     + pdfHeader('تقرير متابعة الطالب', 'Student Progress Report — '+esc(name), '#117a65')
     + '<div style="display:flex;gap:8px;margin-bottom:14px">'
     + '<div style="flex:1;background:#eef7ff;border:1px solid #bcd9f2;border-radius:8px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:800;color:#14746b">'+p.sessions.length+'</div><div style="font-size:10px;color:#666">الجلسات</div></div>'
@@ -4969,7 +4960,7 @@ function exportAttPDF(){
       +'</tr>';
   }
 
-  var html = '<div id="printArea" style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#222;max-width:680px;margin:0 auto">'
+  var html = '<div id="printArea" style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#222;max-width:680px;margin:0 auto">'
 
   // Header
   +'<div style="text-align:center;border-bottom:3px solid #c0392b;padding-bottom:14px;margin-bottom:16px">'
@@ -5036,7 +5027,7 @@ function printAttSheet(){
     +'<title>كشف الحضور</title>'
     +'<style>'
     +'*{box-sizing:border-box;margin:0;padding:0}'
-    +'body{font-family:Tahoma,Arial,sans-serif;background:#fff;padding:20px;direction:rtl}'
+    +'body{font-family:Helvetica,Tahoma,Arial,sans-serif;background:#fff;padding:20px;direction:rtl}'
     +'@media print{'
     +'  body{padding:10px}'
     +'  button{display:none!important}'
@@ -5074,7 +5065,7 @@ function pdfDownload(html, filename, landscape){
   if (typeof html2pdf === 'undefined') {
     // graceful fallback: print window (user can "Save as PDF")
     var w = window.open('','_blank','width=900,height=950');
-    w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>'+esc(filename)+'</title><style>body{font-family:Tahoma,Arial,sans-serif;direction:rtl;padding:16px}</style></head><body>'+html+'<script>window.print()<\/script></body></html>');
+    w.document.write('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>'+esc(filename)+'</title><style>body{font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;padding:16px}</style></head><body>'+html+'<script>window.print()<\/script></body></html>');
     w.document.close();
     return;
   }
@@ -5170,7 +5161,7 @@ function buildDayReportHTML(histKey){
   for(var i=0;i<objs.length;i++){var r=dayData[i]||{};if(r.attendance==='present')p++;if(r.attendance==='absent')a++;if(r.evaluated){ev++;sum+=r.total||0;cnt++;}}
   var avg = cnt ? (sum/cnt).toFixed(2) : '—';
 
-  var html = '<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
+  var html = '<div style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
     + pdfHeader('التقرير التفصيلي للدرجات والتقييم', 'Detailed Daily Evaluation Report — '+clean+' ('+dow+') — المجموعة '+grp, '#14746b')
     + '<div style="display:flex;gap:8px;margin-bottom:14px">'
     + '<div style="flex:1;background:#eef7ff;border:1px solid #bcd9f2;border-radius:8px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:800;color:#14746b">'+objs.length+'</div><div style="font-size:10px;color:#666">الطلاب</div></div>'
@@ -5246,7 +5237,7 @@ function exportFullPDF(){
   var days = Object.keys(history).sort();
   if(!days.length){ toast('لا توجد بيانات في السجل'); return; }
   var colors=['#14746b','#117a65','#6c3483','#b7770d','#922b21'];
-  var html = '<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
+  var html = '<div style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
     + pdfHeader('سجل الدرجات الكامل', 'Complete Grades Record — جميع الأيام والمجموعات', '#117a65');
 
   days.forEach(function(dk){
@@ -5965,7 +5956,7 @@ function buildNotesPDF(dateStr, group, notes){
   var body = safe.split(/\n{2,}/).map(function(p){
     return '<p style="margin:0 0 12px 0">'+p.replace(/\n/g,'<br>')+'</p>';
   }).join('');
-  return '<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
+  return '<div style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#222">'
     + pdfHeader('ملاحظات اليوم', 'Daily Notes — '+dateStr+' ('+dow+') — المجموعة '+grp, '#34495e')
     + '<div style="border:1px solid #dfe5ea;border-radius:10px;padding:18px 20px;font-size:14px;line-height:2;background:#fdfdfd;min-height:120px">'+body+'</div>'
     + pdfSignature() + '</div>';
@@ -7106,7 +7097,7 @@ function exportCommitteePDF(){
   var amendedByName={};
   try{ Object.keys(eva.evaluations).forEach(function(id){ var r=eva.evaluations[id];
     if(r.amended && r.studentId) amendedByName[Selectors.studentName(r.studentId)]=true; }); }catch(e){}
-  var h='<div style="font-family:Tahoma,Arial,sans-serif;direction:rtl;color:#1a2b28;padding:8px">';
+  var h='<div style="font-family:Helvetica,Tahoma,Arial,sans-serif;direction:rtl;color:#1a2b28;padding:8px">';
   h+='<div style="text-align:center;border-bottom:3px double #14746b;padding-bottom:12px;margin-bottom:14px">';
   h+='<div style="font-size:20px;font-weight:800;color:#14746b">تقرير لجنة التقييم السريري</div>';
   h+='<div style="font-size:13px;margin-top:4px">كلية التمريض — جامعة بغداد'+(courseName?(' • '+esc(courseName)):'')+'</div>';

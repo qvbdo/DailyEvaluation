@@ -10,12 +10,13 @@
        app's own offline queue + live sync handle those.
    Bump CACHE_VERSION whenever you change cached files to force an update.
    ────────────────────────────────────────────────────────────────────── */
-const CACHE_VERSION = 'hsp-v11';
+const CACHE_VERSION = 'hsp-v12';
 const PRECACHE = [
   '/index.html',
   '/offline.html',
   '/manifest.json',
   '/styles.css',
+  '/hero-bg.jpg',
   '/src/bus.js',
   '/src/store.js',
   '/src/selectors.js',
