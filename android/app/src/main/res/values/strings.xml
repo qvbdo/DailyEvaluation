@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Eva Clinical Rotations</string>
+    <string name="title_activity_main">Eva Clinical Rotations</string>
+    <string name="package_name">com.evaclinical.rotations</string>
+    <string name="custom_url_scheme">com.evaclinical.rotations</string>
+</resources>
