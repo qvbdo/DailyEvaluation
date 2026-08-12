@@ -1,0 +1,21 @@
+{
+  "name": "eva-clinical-rotations",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p dist && cp -r index.html styles.css src manifest.json icon-192.png icon-512.png icon-maskable-512.png hero-bg.jpg offline.html apple-touch-icon.png dist/ && node build-single.mjs dist",
+    "cap:sync": "npx cap sync",
+    "cap:open-android": "npx cap open android",
+    "cap:open-ios": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "typescript": "^5.4.5"
+  }
+}
